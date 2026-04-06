@@ -6,3 +6,11 @@
 *.fls
 *.fdb_latexmk
 *.synctex.gz
+
+
+
+.pytest_cache
+__pycache__
+build
+data
+.venv
