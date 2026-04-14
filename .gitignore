@@ -16,4 +16,4 @@ data
 .venv
 
 # Builds
-transformer_naive
+bin/

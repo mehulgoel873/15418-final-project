@@ -1,7 +1,8 @@
+#pragma once
 #include <cuda_runtime.h>
 #include <stdio.h>
 #include <math.h>
-#include "matmul.cu"
+#include "matmul.cuh"
 
 __global__ void transpose_kernel(float* input, float* output, int rows, int cols) {
     int row = blockIdx.y * blockDim.y + threadIdx.y;
@@ -70,8 +71,8 @@ public:
         dim3 blockSize(16, 16);
         dim3 gridSize((N + blockSize.x - 1) / blockSize.x, (N + blockSize.y - 1) / blockSize.y);
         transpose_kernel<<<gridSize, blockSize>>>(k, k_transposed, N, d);
-        matmul_kernel<<<gridSize, blockSize>>>(q, k_transposed, attn_scores, N, d, N);
         cudaDeviceSynchronize();
+        matmul_naive(q, k_transposed, attn_scores, N, d, N);
 
         // Scale attention scores
         scale_kernel<<<gridSize, blockSize>>>(attn_scores, N, d);
@@ -82,7 +83,7 @@ public:
         cudaDeviceSynchronize();
 
         // Compute attention output: attn_output = attn_probs x V
-        matmul_kernel<<<gridSize, blockSize>>>(attn_probs, v, attn_output, N, N, d);
+        matmul_naive(attn_probs, v, attn_output, N, N, d);
         cudaDeviceSynchronize();
 
         // Copy the result to the output matrix
