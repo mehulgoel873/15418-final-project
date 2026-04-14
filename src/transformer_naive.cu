@@ -1,27 +1,13 @@
 #include <cuda_runtime.h>
 #include <stdio.h>
 #include <math.h>
+#include "matmul.cu"
 
 __global__ void transpose_kernel(float* input, float* output, int rows, int cols) {
     int row = blockIdx.y * blockDim.y + threadIdx.y;
     int col = blockIdx.x * blockDim.x + threadIdx.x;
     if (row < rows && col < cols) {
         output[col * rows + row] = input[row * cols + col];
-    }
-}
-
-/// Matrix multiplication kernel: output = A x B
-/// A: M x N, B: N x K, output: M x K
-/// Kernel of size at least (M, K) to cover all output elements
-__global__ void matmul_kernel(float* A, float* B, float* output, int M, int N, int K) {
-    int row = blockIdx.y * blockDim.y + threadIdx.y;
-    int col = blockIdx.x * blockDim.x + threadIdx.x;
-    if (row < M && col < K) {
-        float value = 0.0f;
-        for (int j = 0; j < N; j++) {
-            value += A[row * N + j] * B[j * K + col];
-        }
-        output[row * K + col] = value;
     }
 }
 
@@ -69,10 +55,16 @@ public:
         float* attn_scores;
         float* attn_probs;
         float* attn_output;
-        cudaMalloc(&k_transposed, N * d * sizeof(float));
-        cudaMalloc(&attn_scores, N * N * sizeof(float));
-        cudaMalloc(&attn_probs, N * N * sizeof(float));
-        cudaMalloc(&attn_output, N * d * sizeof(float));
+        size_t attn_bytes = (size_t)N * N * sizeof(float);
+        size_t tok_bytes  = (size_t)N * d * sizeof(float);
+        if (cudaMalloc(&k_transposed, tok_bytes)  != cudaSuccess ||
+            cudaMalloc(&attn_scores,  attn_bytes) != cudaSuccess ||
+            cudaMalloc(&attn_probs,   attn_bytes) != cudaSuccess ||
+            cudaMalloc(&attn_output,  tok_bytes)  != cudaSuccess) {
+            fprintf(stderr, "cudaMalloc failed: N=%d d=%d requires ~%.1f GB for attn matrices\n",
+                    N, d, 2.0 * attn_bytes / 1e9);
+            return;
+        }
 
         // Compute attention scores: attn_scores = Q x K^T
         dim3 blockSize(16, 16);
