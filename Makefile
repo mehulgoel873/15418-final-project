@@ -1,16 +1,19 @@
-.PHONY: lib, pybind, clean, format, all
+.PHONY: all run clean
 
-all: lib
+NVCC      := nvcc
+NVCCFLAGS := -O2 -std=c++14 -I src/
 
+TARGET := transformer_naive
+SRC    := src/main.cpp
 
-lib:
-	@mkdir -p build
-	@cd build; cmake ..
-	@cd build; $(MAKE)
+all: $(TARGET)
 
-format:
-	python3 -m black .
-	clang-format -i src/*.cc src/*.cu
+$(TARGET): $(SRC) src/transformer_naive.cu
+	$(NVCC) $(NVCCFLAGS) -o $@ $(SRC)
+
+run: $(TARGET)
+	./$(TARGET)
 
 clean:
-	rm -rf build python/needle/backend_ndarray/ndarray_backend*.so
+	rm -f $(TARGET)
+	rm -rf build
