@@ -1,19 +1,28 @@
-.PHONY: all run clean
+.PHONY: all run test clean
 
 NVCC      := nvcc
 NVCCFLAGS := -O2 -std=c++14 -I src/
 
-TARGET := transformer_naive
-SRC    := src/main.cu
+BIN         := bin
+TARGET      := $(BIN)/transformer_naive
+TEST_TARGET := $(BIN)/test_matmul
+SRC         := src/main.cu
 
 all: $(TARGET)
 
-$(TARGET): $(SRC) src/transformer_naive.cu src/matmul.cu
-	$(NVCC) $(NVCCFLAGS) -o $@ $(SRC)
+$(BIN):
+	mkdir -p $(BIN)
+
+$(TARGET): $(SRC) src/transformer_naive.cu src/matmul.cu | $(BIN)
+	$(NVCC) $(NVCCFLAGS) -o $@ $(SRC) src/matmul.cu
+
+$(TEST_TARGET): tests/test_matmul.cu src/matmul.cu | $(BIN)
+	$(NVCC) $(NVCCFLAGS) -o $@ tests/test_matmul.cu src/matmul.cu
+
+test: $(TEST_TARGET)
 
 run: $(TARGET)
 	./$(TARGET)
 
 clean:
-	rm -f $(TARGET)
-	rm -rf build
+	rm -rf $(BIN)
