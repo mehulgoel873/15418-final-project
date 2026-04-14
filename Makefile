@@ -4,7 +4,7 @@ NVCC      := nvcc
 NVCCFLAGS := -O2 -std=c++14 -I src/
 
 BIN         := bin
-TARGET      := $(BIN)/transformer_naive
+TARGET      := $(BIN)/bench
 TEST_TARGET := $(BIN)/test_matmul
 SRC         := src/main.cu
 
