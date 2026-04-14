@@ -1,10 +1,11 @@
 #include <cuda_runtime.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <functional>
 
 #include "transformer_naive.cu"
-// #include "transformer_fast.cu", etc
+#include "transformer_tiled_matmul.cu"
 
 // q, k, v, output, N, d
 typedef std::function<void(float*, float*, float*, float*, int, int)> ForwardFn;
@@ -50,37 +51,60 @@ static float benchmark(ForwardFn fn, int N, int d, int iters)
     return ms / iters;
 }
 
+static void usage(const char* prog) {
+    fprintf(stderr,
+            "Usage: %s [--impl <naive|tiled>] [N d [iters]]\n"
+            "  --impl  which transformer to run (default: naive)\n"
+            "  N       sequence length        (default: 4096)\n"
+            "  d       embedding dimension    (default: 4096)\n"
+            "  iters   benchmark iterations   (default: 10)\n",
+            prog);
+}
+
 int main(int argc, char** argv)
 {
-    int N      = 1024;
-    int d      = 512;
-    int iters  = 10;
+    const char* impl = "naive";
+    int N     = 4096;
+    int d     = 4096;
+    int iters = 10;
 
-    if (argc >= 3) { N = atoi(argv[1]); d = atoi(argv[2]); }
-    if (argc >= 4) iters  = atoi(argv[3]);
+    // Parse --impl <name> first, then remaining positional args N d iters.
+    int pos = 0;
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--impl") == 0) {
+            if (++i >= argc) { usage(argv[0]); return 1; }
+            impl = argv[i];
+        } else if (strcmp(argv[i], "--help") == 0) {
+            usage(argv[0]); return 0;
+        } else {
+            switch (pos++) {
+                case 0: N     = atoi(argv[i]); break;
+                case 1: d     = atoi(argv[i]); break;
+                case 2: iters = atoi(argv[i]); break;
+            }
+        }
+    }
 
     printf("N=%-6d  d=%-6d  iters=%d\n\n", N, d, iters);
     printf("%-28s  %10s\n", "Implementation", "ms/iter");
     printf("%-28s  %10s\n", "----------------------------", "----------");
 
-    {
-        TransformerNaive impl;
-        float ms = benchmark(
-            [&](float* q, float* k, float* v, float* out, int N, int d) {
-                impl.forward(q, k, v, out, N, d);
-            }, N, d, iters);
+    if (strcmp(impl, "naive") == 0) {
+        TransformerNaive t;
+        float ms = benchmark([&](float* q, float* k, float* v, float* out, int N, int d) {
+            t.forward(q, k, v, out, N, d);
+        }, N, d, iters);
         printf("%-28s  %10.3f\n", "TransformerNaive", ms);
+    } else if (strcmp(impl, "tiled") == 0) {
+        TransformerTiledMatmul t;
+        float ms = benchmark([&](float* q, float* k, float* v, float* out, int N, int d) {
+            t.forward(q, k, v, out, N, d);
+        }, N, d, iters);
+        printf("%-28s  %10.3f\n", "TransformerTiledMatmul", ms);
+    } else {
+        fprintf(stderr, "Unknown impl '%s'. Choose: naive, tiled\n", impl);
+        usage(argv[0]); return 1;
     }
-
-    // Add new implementations here:
-    // {
-    //     TransformerFast impl;
-    //     float ms = benchmark(
-    //         [&](float* q, float* k, float* v, float* out, int N, int d) {
-    //             impl.forward(q, k, v, out, N, d);
-    //         }, N, d, warmup, iters);
-    //     printf("%-28s  %10.3f\n", "TransformerFast", ms);
-    // }
 
     return 0;
 }
