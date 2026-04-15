@@ -1,0 +1,69 @@
+\documentclass[11pt]{article}
+
+
+\usepackage[left=1in, right=1in, top=1in, bottom=1in]{geometry}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{graphicx}
+\usepackage{listings}
+\usepackage{color}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{fancyhdr}
+\usepackage{pgfplots}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{placeins}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning, calc}
+\pgfplotsset{compat=1.18}
+
+\title{Blocked Dynamic Sparse Attention}
+\author{Mehul Goel (mehulg), Saransh Agrawal (saransh2) \\ \small Website: https://mehulgoel873.github.io/15418-final-project/}
+\date{}
+
+\thispagestyle{plain}
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{Blocked Dynamic Sparse Attention}
+\rhead{Mehul Goel, Saransh Agrawal}
+\setlength{\headheight}{14pt}
+
+\begin{document}
+\maketitle
+
+
+\section*{Updated Schedule}
+\textbf{TODO}
+Over 5 weeks, we plan to follow this schedule:
+\begin{itemize}
+    \item \textbf{Week 1:} Implement a naive CUDA version of the attention block that materializes the full attention matrix in global memory. Verify correctness against a CPU implementation and establish a performance baseline.
+
+    \item \textbf{Week 2:} Implement a tiled and fused version of the attention block (a la, FlashAttention), keeping intermediate results in shared memory to reduce global memory traffic. Benchmark against the naive implementation.
+
+    \item \textbf{Week 3:} Implement static sparse attention patterns (e.g., local, strided) that prune blocks of the attention matrix based on fixed heuristics. Evaluate accuracy and performance tradeoffs.
+
+    \item \textbf{Week 4:} Implement dynamic sparse attention patterns (e.g., top-$k$) that adaptively prune blocks based on input data. This will involve additional computation to determine which blocks to keep, as well as handling irregular memory access patterns.
+
+    \item \textbf{Week 5:} Flex room for prior weeks' goals. Perform a comprehensive performance analysis comparing all implementations across varying sequence lengths and sparsity levels. Prepare final deliverables and documentation.
+\end{itemize}
+
+\section*{Current Progress}
+
+We have established a functional baseline and begun preliminary optimizations. First, we implemented a naive CUDA attention kernel that exploits data-level parallelism across the GPU's thread hierarchy, serving as a correctness reference and performance baseline. To validate subsequent optimizations, we developed a testing framework that compares kernel outputs against the naive implementation using numerical tolerance checks.
+
+We then implemented a shared-memory tiled matrix multiplication kernel, which reduces redundant global memory traffic by staging tiles of the input matrices into on-chip shared memory before computing partial products. This optimization yielded approximately a 10\% reduction in execution time on small-scale inputs. To systematically characterize performance across problem sizes, we extended our benchmarking infrastructure to sweep over multiple sequence lengths and report averaged latency across repeated trials, enabling more statistically stable comparisons between implementations.
+
+\section*{Progress Estimate}
+The project is on track with respect to its revised scope. Based on feedback received after the proposal phase, we narrowed our focus from reproducing FlashAttention-style fused kernels to concentrating on dynamic sparse attention—specifically, the algorithmic and implementation challenges of adaptively selecting and computing only the most relevant attention blocks at runtime. The benchmarking and correctness infrastructure developed to date will directly support this investigation.
+
+For the poster session, we plan to present performance profiles comparing dense, statically sparse, and dynamically sparse attention kernels across varying sequence lengths and sparsity budgets.
+
+\section*{Concerns}
+The primary technical risk is that dynamic sparse attention may offer limited wall-clock speedup in practice. The overhead of computing block-level importance scores at runtime—and the resulting irregular memory access patterns—can offset the savings from skipping low-weight blocks. Because this remains an active research area, state-of-the-art implementations typically couple sparsity with additional optimizations (e.g., specialized CUDA kernels for irregular gather/scatter, hardware-aware block scheduling) that are non-trivial to reproduce independently. It is therefore uncertain whether a clean implementation will achieve speedups that clearly justify the added complexity relative to our dense baseline.
+
+
+
+
+\end{document}
