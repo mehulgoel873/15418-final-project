@@ -1,10 +1,10 @@
-#include "transformer_tiled_matmul.cuh"
+#include "transformer_tiled.cuh"
 #include "transformer_naive.cuh"
 #include "matmul.cuh"
 #include "softmax.cuh"
 #include <stdio.h>
 
-void TransformerTiledMatmul::forward(float* q, float* k, float* v, float* output, int N, int d) {
+void TransformerTiled::forward(float* q, float* k, float* v, float* output, int N, int d) {
     float* k_transposed;
     float* attn_scores;
     float* attn_probs;
@@ -28,9 +28,10 @@ void TransformerTiledMatmul::forward(float* q, float* k, float* v, float* output
     cudaDeviceSynchronize();
     matmul_tiled(q, k_transposed, attn_scores, N, d, N);
 
+    // TODO: fuse scale and softmax into one kernel to save memory bandwidth
     scale_kernel<<<gridSize, blockSize>>>(attn_scores, N, d);
     cudaDeviceSynchronize();
-    softmax_kernel<<<gridSize, blockSize>>>(attn_scores, attn_probs, N, N);
+    softmax_tiled(attn_scores, attn_probs, N, N);
     cudaDeviceSynchronize();
 
     // attn_output = attn_probs x V

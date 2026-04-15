@@ -4,8 +4,9 @@
 #include <string.h>
 #include <functional>
 
-#include "transformer_naive.cu"
-#include "transformer_tiled_matmul.cu"
+#include "transformer_naive.cuh"
+#include "transformer_tiled_matmul.cuh"
+#include "transformer_tiled.cuh"
 
 // q, k, v, output, N, d
 typedef std::function<void(float*, float*, float*, float*, int, int)> ForwardFn;
@@ -65,7 +66,7 @@ int main(int argc, char** argv)
 {
     const char* impl = "naive";
     int N     = 4096;
-    int d     = 4096;
+    int d     = 64;
     int iters = 10;
 
     // Parse --impl <name> first, then remaining positional args N d iters.
@@ -95,14 +96,20 @@ int main(int argc, char** argv)
             t.forward(q, k, v, out, N, d);
         }, N, d, iters);
         printf("%-28s  %10.3f\n", "TransformerNaive", ms);
-    } else if (strcmp(impl, "tiled") == 0) {
+    } else if (strcmp(impl, "tiled_matmul") == 0) {
         TransformerTiledMatmul t;
         float ms = benchmark([&](float* q, float* k, float* v, float* out, int N, int d) {
             t.forward(q, k, v, out, N, d);
         }, N, d, iters);
         printf("%-28s  %10.3f\n", "TransformerTiledMatmul", ms);
+    } else if (strcmp(impl, "tiled") == 0) {
+        TransformerTiled t;
+        float ms = benchmark([&](float* q, float* k, float* v, float* out, int N, int d) {
+            t.forward(q, k, v, out, N, d);
+        }, N, d, iters);
+        printf("%-28s  %10.3f\n", "TransformerTiled", ms);
     } else {
-        fprintf(stderr, "Unknown impl '%s'. Choose: naive, tiled\n", impl);
+        fprintf(stderr, "Unknown impl '%s'. Choose: naive, tiled_matmul, tiled\n", impl);
         usage(argv[0]); return 1;
     }
 
