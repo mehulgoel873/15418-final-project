@@ -79,8 +79,8 @@ __global__ void softmax_tiled_kernel(float* input, float* output, int row_len, i
 
     // Warp 0 Sweep: Perform parallel reduction in shared memory using Warp 0
     // Warp 0 Sweep helps handle cases where blockDim.x is not a power of two
-    if (threadIdx.x < min(32, blockDim.x / 32)) { // only first warp participates in reduction
-        max_val = threadIdx.x < blockDim.x / 32 ? shared_mem[threadIdx.x / 32] : -INFINITY; // load warp maxes into registers
+    if (threadIdx.x < 32) { // only first warp participates in reduction
+        max_val = threadIdx.x < blockDim.x / 32 ? shared_mem[threadIdx.x] : -INFINITY; // load warp maxes into registers
 
         for (int offset = 16; offset > 0; offset /= 2) {
             max_val = fmaxf(max_val, __shfl_down_sync(0xFFFFFFFF, max_val, offset));
@@ -125,8 +125,8 @@ __global__ void softmax_tiled_kernel(float* input, float* output, int row_len, i
     __syncthreads();
 
     // Warp 0 Sweep: Perform parallel reduction of warp sums in shared memory using Warp 0
-    if (threadIdx.x < min(32, blockDim.x / 32)) { // only first warp participates in reduction
-        sum_exp = threadIdx.x < blockDim.x / 32 ? shared_mem[threadIdx.x / 32] : 0.0f; // load warp sums into registers
+    if (threadIdx.x < 32) { // only first warp participates in reduction
+        sum_exp = threadIdx.x < blockDim.x / 32 ? shared_mem[threadIdx.x] : 0.0f; // load warp sums into registers
 
         for (int offset = 16; offset > 0; offset /= 2) {
             sum_exp += __shfl_down_sync(0xFFFFFFFF, sum_exp, offset);
