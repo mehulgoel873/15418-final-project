@@ -66,7 +66,7 @@ int main(int argc, char** argv)
 {
     const char* impl = "naive";
     int N     = 4096;
-    int d     = 64;
+    int d     = 2048;
     int iters = 10;
 
     // Parse --impl <name> first, then remaining positional args N d iters.

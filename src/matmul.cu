@@ -26,88 +26,66 @@ void matmul_naive(float* A, float* B, float* output, int M, int N, int K) {
 
 
 // ---------------------------------------------------------------------------
-// Tiled matrix multiplication — 8x8 output tile, 2 elements per thread
+// Tiled matrix multiplication — 32x32 output tile, 1 element per thread
 //
-// blockDim = (TILE_WIDTH=8, TILE_HEIGHT=4) -> 32 threads = one full warp.
+// blockDim = (32, 32) = 1024 threads = the per-block maximum.
+// Each thread owns exactly one output element: output[row][col].
 //
-// Each block owns an 8x8 region of the output.  With only 4 rows of threads,
-// each thread computes two output elements: rows threadIdx.y and threadIdx.y+4.
+// Inner tile step: TILE_K = 32 (columns of A / rows of B per iteration).
 //
-// Inner tile step: TILE_K = 8 (columns of A / rows of B loaded per iteration).
+// Shared memory per block:
+//   sA[32][32] = 4 KB  (TILE_HEIGHT rows x TILE_K cols of A)
+//   sB[32][32] = 4 KB  (TILE_K rows x TILE_WIDTH cols of B)
+//   Total: 8 KB — well within the 48 KB limit.
 //
-// Shared memory per block (128 floats = 512 bytes, well within limits):
-//   sA[8][8]  — 8 rows x 8 cols of A
-//   sB[8][8]  — 8 rows x 8 cols of B
+// Loading: 1024 threads, 1024 elements in each tile -> 1 load per thread,
+// no conditionals, no idle threads, perfectly symmetric.
 //
-// Loading: both tiles have 64 elements and we have 32 threads, so every
-// thread does exactly 2 loads for sA and 2 loads for sB — fully symmetric,
-// no conditionals, all threads active.
+// Arithmetic intensity: T/4 = 32/4 = 8 FLOPs/byte (vs 2 for the old 8x8 tile).
 // ---------------------------------------------------------------------------
 
-static constexpr int TILE_HEIGHT = 4;   // threads in y; each covers 2 output rows
-static constexpr int TILE_WIDTH  = 8;   // threads in x; output tile width
-static constexpr int TILE_K      = 8;   // inner tile step (= TILE_WIDTH -> square shared tiles)
+static constexpr int TILE_HEIGHT = 64;
+static constexpr int TILE_WIDTH  = 64;
+static constexpr int TILE_K      = 64;
 
 __global__ void matmul_tiled_kernel(float* A, float* B, float* output, int M, int N, int K) {
-    __shared__ float sA[TILE_K][TILE_WIDTH];   // [8][8], slice of A
-    __shared__ float sB[TILE_K][TILE_WIDTH];   // [8][8], slice of B
+    __shared__ float sA[TILE_HEIGHT][TILE_K];   // [32][32]
+    __shared__ float sB[TILE_K][TILE_WIDTH];    // [32][32]
 
-    // The two output rows this thread is responsible for.
-    int row0 = blockIdx.y * (TILE_HEIGHT * 2) + threadIdx.y;
-    int row1 = row0 + TILE_HEIGHT;
-    int col  = blockIdx.x * TILE_WIDTH + threadIdx.x;
+    int row = blockIdx.y * TILE_HEIGHT + threadIdx.y;
+    int col = blockIdx.x * TILE_WIDTH  + threadIdx.x;
 
-    float val0 = 0.0f;   // accumulator for row0
-    float val1 = 0.0f;   // accumulator for row1
-
-    // Flat index of this thread within the 32-thread block (0..31).
-    int lin = threadIdx.y * TILE_WIDTH + threadIdx.x;
+    float val = 0.0f;
 
     int numTiles = N / TILE_K;
     for (int t = 0; t < numTiles; t++) {
-
-        // --- Load sA[8][8] (64 elements, 2 per thread) ---------------
-        int a0r = lin / TILE_WIDTH,        a0c = lin % TILE_WIDTH;
-        int a1r = (lin + 32) / TILE_WIDTH, a1c = (lin + 32) % TILE_WIDTH;
-        sA[a0r][a0c] = A[(blockIdx.y * (TILE_HEIGHT * 2) + a0r) * N + t * TILE_K + a0c];
-        sA[a1r][a1c] = A[(blockIdx.y * (TILE_HEIGHT * 2) + a1r) * N + t * TILE_K + a1c];
-
-        // --- Load sB[8][8] (64 elements, 2 per thread) ---------------
-        int b0r = lin / TILE_WIDTH,        b0c = lin % TILE_WIDTH;
-        int b1r = (lin + 32) / TILE_WIDTH, b1c = (lin + 32) % TILE_WIDTH;
-        sB[b0r][b0c] = B[(t * TILE_K + b0r) * K + blockIdx.x * TILE_WIDTH + b0c];
-        sB[b1r][b1c] = B[(t * TILE_K + b1r) * K + blockIdx.x * TILE_WIDTH + b1c];
+        // Each thread loads exactly 1 element from A and 1 from B — no logic needed.
+        sA[threadIdx.y][threadIdx.x] = A[row * N + t * TILE_K + threadIdx.x];
+        sB[threadIdx.y][threadIdx.x] = B[(t * TILE_K + threadIdx.y) * K + col];
 
         __syncthreads();
 
-        // --- Accumulate partial dot products --------------------------
-        // Both output elements share the same sB column (threadIdx.x) but
-        // read different rows of sA: threadIdx.y for val0, threadIdx.y+4 for val1.
         for (int j = 0; j < TILE_K; j++) {
-            val0 += sA[threadIdx.y][j]              * sB[j][threadIdx.x];
-            val1 += sA[threadIdx.y + TILE_HEIGHT][j] * sB[j][threadIdx.x];
+            val += sA[threadIdx.y][j] * sB[j][threadIdx.x];
         }
 
         __syncthreads();
     }
 
-    output[row0 * K + col] = val0;
-    output[row1 * K + col] = val1;
+    output[row * K + col] = val;
 }
 
 /// Host launcher for the tiled matmul.
-/// Requires M % 8 == 0, K % 8 == 0, N % 8 == 0.
+/// Requires M % 32 == 0, K % 32 == 0, N % 32 == 0.
 void matmul_tiled(float* A, float* B, float* output, int M, int N, int K) {
-    if (M % (TILE_HEIGHT * 2) != 0 || K % TILE_WIDTH != 0 || N % TILE_K != 0) {
+    if (M % TILE_HEIGHT != 0 || K % TILE_WIDTH != 0 || N % TILE_K != 0) {
         fprintf(stderr,
-                "matmul: dimensions must be divisible by tile sizes "
-                "(M%%%d, N%%%d, K%%%d); got M=%d N=%d K=%d\n",
-                TILE_HEIGHT * 2, TILE_K, TILE_WIDTH, M, N, K);
+                "matmul_tiled: dimensions must be divisible by %d; got M=%d N=%d K=%d\n",
+                TILE_HEIGHT, M, N, K);
         assert(false);
     }
 
-    // One block per 8x8 output tile; each block is exactly one warp (32 threads).
-    dim3 blockSize(TILE_WIDTH, TILE_HEIGHT);               // (8, 4)
-    dim3 gridSize(K / TILE_WIDTH, M / (TILE_HEIGHT * 2));  // covers the full MxK output
+    dim3 blockSize(TILE_WIDTH, TILE_HEIGHT);    // (32, 32) = 1024 threads
+    dim3 gridSize(K / TILE_WIDTH, M / TILE_HEIGHT);
     matmul_tiled_kernel<<<gridSize, blockSize>>>(A, B, output, M, N, K);
 }
