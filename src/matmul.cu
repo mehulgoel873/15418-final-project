@@ -1,6 +1,8 @@
 #include "matmul.cuh"
+#include "timing.cuh"
 #include <cassert>
 #include <cstdio>
+#include <cstring>
 
 /// Naive matrix multiplication kernel: output = A x B
 /// A: M x N, B: N x K, output: M x K
@@ -19,9 +21,11 @@ __global__ void matmul_kernel(float* A, float* B, float* output, int M, int N, i
 
 /// Host launcher for the naive matmul kernel.
 void matmul_naive(float* A, float* B, float* output, int M, int N, int K) {
+    char label[64];
+    snprintf(label, sizeof(label), "matmul_naive %dx%dx%d", M, N, K);
     dim3 blockSize(16, 16);
     dim3 gridSize((K + 15) / 16, (M + 15) / 16);
-    matmul_kernel<<<gridSize, blockSize>>>(A, B, output, M, N, K);
+    time_and_print(label, [&]{ matmul_kernel<<<gridSize, blockSize>>>(A, B, output, M, N, K); });
 }
 
 
@@ -85,7 +89,9 @@ void matmul_tiled(float* A, float* B, float* output, int M, int N, int K) {
         assert(false);
     }
 
-    dim3 blockSize(TILE_WIDTH, TILE_HEIGHT);    // (32, 32) = 1024 threads
+    char label[64];
+    snprintf(label, sizeof(label), "matmul_tiled %dx%dx%d", M, N, K);
+    dim3 blockSize(TILE_WIDTH, TILE_HEIGHT);
     dim3 gridSize(K / TILE_WIDTH, M / TILE_HEIGHT);
-    matmul_tiled_kernel<<<gridSize, blockSize>>>(A, B, output, M, N, K);
+    time_and_print(label, [&]{ matmul_tiled_kernel<<<gridSize, blockSize>>>(A, B, output, M, N, K); });
 }

@@ -1,4 +1,7 @@
 #include "softmax.cuh"
+#include "timing.cuh"
+#include <cstdio>
+#include <cstring>
 
 /// Naive softmax kernel: output = row-wise softmax(input)
 /// input: row_len x num_rows, output: row_len x num_rows
@@ -25,9 +28,11 @@ __global__ void softmax_kernel(float* input, float* output, int row_len, int num
     
 /// Host launcher for the naive softmax kernel.
 void softmax_naive(float* input, float* output, int row_len, int num_rows) {
+    char label[64];
+    snprintf(label, sizeof(label), "softmax_naive %dx%d", num_rows, row_len);
     dim3 blockSize(16, 16);
     dim3 gridSize((row_len + blockSize.x - 1) / blockSize.x, (num_rows + blockSize.y - 1) / blockSize.y);
-    softmax_kernel<<<gridSize, blockSize>>>(input, output, row_len, num_rows);
+    time_and_print(label, [&]{ softmax_kernel<<<gridSize, blockSize>>>(input, output, row_len, num_rows); });
 }
 
 
@@ -156,8 +161,11 @@ void softmax_tiled(float* input, float* output, int row_len, int num_rows) {
     int BLOCK_WIDTH = ((min(1024, row_len) + 31) / 32) * 32; // Round up to nearest multiple of 32 to prevent warp sync deadlocks
     static constexpr int BLOCK_HEIGHT = 1;
 
+    char label[64];
+    snprintf(label, sizeof(label), "softmax_tiled %dx%d", num_rows, row_len);
     // One block per output row, with chunking logic if row_len > BLOCK_WIDTH
     dim3 blockSize(BLOCK_WIDTH, BLOCK_HEIGHT);
     dim3 gridSize(1, num_rows);
-    softmax_tiled_kernel<<<gridSize, blockSize, (blockSize.x / 32) * sizeof(float)>>>(input, output, row_len, num_rows);
+    size_t smem = (blockSize.x / 32) * sizeof(float);
+    time_and_print(label, [&]{ softmax_tiled_kernel<<<gridSize, blockSize, smem>>>(input, output, row_len, num_rows); });
 }
