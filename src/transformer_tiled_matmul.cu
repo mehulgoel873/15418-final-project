@@ -30,7 +30,7 @@ void TransformerTiledMatmul::forward(float* q, float* k, float* v, float* output
 
     scale_kernel<<<gridSize, blockSize>>>(attn_scores, N, d);
     cudaDeviceSynchronize();
-    softmax_kernel<<<gridSize, blockSize>>>(attn_scores, attn_probs, N, N);
+    softmax_naive(attn_scores, attn_probs, N, N);
     cudaDeviceSynchronize();
 
     // attn_output = attn_probs x V
