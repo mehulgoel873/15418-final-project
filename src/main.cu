@@ -181,7 +181,7 @@ int main(int argc, char** argv)
         printf("N=%-6d  d=%-6d  iters=%d\n\n", N, d, iters);
         printf("%-28s  %10s\n", "Implementation", "ms/iter");
         printf("%-28s  %10s\n", "----------------------------", "----------");
-        printf("%-28s  %10.3f\n", "TransformerNaive", ms);
+        printf("%-28s  %10.3f\n", "Transformer Tiled Matmul", ms);
     } else if (strcmp(impl, "tiled") == 0) {
         TransformerTiled t;
         float ms = benchmark([&](float* q, float* k, float* v, float* out, int N, int d) {
@@ -191,7 +191,7 @@ int main(int argc, char** argv)
         printf("N=%-6d  d=%-6d  iters=%d\n\n", N, d, iters);
         printf("%-28s  %10s\n", "Implementation", "ms/iter");
         printf("%-28s  %10s\n", "----------------------------", "----------");
-        printf("%-28s  %10.3f\n", "TransformerNaive", ms);
+        printf("%-28s  %10.3f\n", "Transformer Tiled", ms);
     } else {
         fprintf(stderr, "Unknown impl '%s'. Choose: naive, tiled_matmul, tiled\n", impl);
         usage(argv[0]); return 1;
