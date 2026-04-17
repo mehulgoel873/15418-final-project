@@ -48,9 +48,9 @@ void matmul_naive(float* A, float* B, float* output, int M, int N, int K) {
 // Arithmetic intensity: T/4 = 32/4 = 8 FLOPs/byte (vs 2 for the old 8x8 tile).
 // ---------------------------------------------------------------------------
 
-static constexpr int TILE_HEIGHT = 64;
-static constexpr int TILE_WIDTH  = 64;
-static constexpr int TILE_K      = 64;
+static constexpr int TILE_HEIGHT = 32;
+static constexpr int TILE_WIDTH  = 32;
+static constexpr int TILE_K      = 32;
 
 __global__ void matmul_tiled_kernel(float* A, float* B, float* output, int M, int N, int K) {
     __shared__ float sA[TILE_HEIGHT][TILE_K];   // [32][32]
