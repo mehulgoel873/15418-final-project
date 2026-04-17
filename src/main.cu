@@ -137,6 +137,30 @@ int main(int argc, char** argv)
         }
     }
 
+    if (do_check && strcmp(impl, "naive") != 0) {
+        printf("Running correctness check against 'naive'...\n");
+        TransformerNaive naive_t;
+        auto naive_fn = [&](float* q, float* k, float* v, float* out, int N, int d) {
+            naive_t.forward(q, k, v, out, N, d);
+        };
+
+        if (strcmp(impl, "tiled_matmul") == 0) {
+            TransformerTiledMatmul t;
+            auto test_fn = [&](float* q, float* k, float* v, float* out, int N, int d) {
+                t.forward(q, k, v, out, N, d);
+            };
+            check_correctness(naive_fn, test_fn, N, d);
+        } else if (strcmp(impl, "tiled") == 0) {
+            TransformerTiled t;
+            auto test_fn = [&](float* q, float* k, float* v, float* out, int N, int d) {
+                t.forward(q, k, v, out, N, d);
+            };
+            check_correctness(naive_fn, test_fn, N, d);
+        }
+        printf("\n");
+    } else if (do_check) {
+        printf("Skipping correctness check: '--impl naive' selected.\n\n");
+    }
 
     if (strcmp(impl, "naive") == 0) {
         TransformerNaive t;
