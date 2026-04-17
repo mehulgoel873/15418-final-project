@@ -7,6 +7,7 @@
 #include "transformer_naive.cuh"
 #include "transformer_tiled_matmul.cuh"
 #include "transformer_tiled.cuh"
+#include "timing.cuh"
 
 // q, k, v, output, N, d
 typedef std::function<void(float*, float*, float*, float*, int, int)> ForwardFn;
@@ -37,8 +38,11 @@ static float benchmark(ForwardFn fn, int N, int d, int iters)
     cudaEventCreate(&t0);
     cudaEventCreate(&t1);
     cudaEventRecord(t0);
-    for (int i = 0; i < iters; i++)
+    for (int i = 0; i < iters; i++) {
+        verbose_timing() = (i == 0);
         fn(q, k, v, output, N, d);
+    }
+    verbose_timing() = false;
     cudaEventRecord(t1);
     cudaEventSynchronize(t1);
 
@@ -86,28 +90,37 @@ int main(int argc, char** argv)
         }
     }
 
-    printf("N=%-6d  d=%-6d  iters=%d\n\n", N, d, iters);
-    printf("%-28s  %10s\n", "Implementation", "ms/iter");
-    printf("%-28s  %10s\n", "----------------------------", "----------");
 
     if (strcmp(impl, "naive") == 0) {
         TransformerNaive t;
         float ms = benchmark([&](float* q, float* k, float* v, float* out, int N, int d) {
             t.forward(q, k, v, out, N, d);
         }, N, d, iters);
+
+        printf("N=%-6d  d=%-6d  iters=%d\n\n", N, d, iters);
+        printf("%-28s  %10s\n", "Implementation", "ms/iter");
+        printf("%-28s  %10s\n", "----------------------------", "----------");
         printf("%-28s  %10.3f\n", "TransformerNaive", ms);
     } else if (strcmp(impl, "tiled_matmul") == 0) {
         TransformerTiledMatmul t;
         float ms = benchmark([&](float* q, float* k, float* v, float* out, int N, int d) {
             t.forward(q, k, v, out, N, d);
         }, N, d, iters);
-        printf("%-28s  %10.3f\n", "TransformerTiledMatmul", ms);
+
+        printf("N=%-6d  d=%-6d  iters=%d\n\n", N, d, iters);
+        printf("%-28s  %10s\n", "Implementation", "ms/iter");
+        printf("%-28s  %10s\n", "----------------------------", "----------");
+        printf("%-28s  %10.3f\n", "TransformerNaive", ms);
     } else if (strcmp(impl, "tiled") == 0) {
         TransformerTiled t;
         float ms = benchmark([&](float* q, float* k, float* v, float* out, int N, int d) {
             t.forward(q, k, v, out, N, d);
         }, N, d, iters);
-        printf("%-28s  %10.3f\n", "TransformerTiled", ms);
+
+        printf("N=%-6d  d=%-6d  iters=%d\n\n", N, d, iters);
+        printf("%-28s  %10s\n", "Implementation", "ms/iter");
+        printf("%-28s  %10s\n", "----------------------------", "----------");
+        printf("%-28s  %10.3f\n", "TransformerNaive", ms);
     } else {
         fprintf(stderr, "Unknown impl '%s'. Choose: naive, tiled_matmul, tiled\n", impl);
         usage(argv[0]); return 1;
