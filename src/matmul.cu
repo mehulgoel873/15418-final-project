@@ -29,30 +29,15 @@ void matmul_naive(float* A, float* B, float* output, int M, int N, int K) {
 }
 
 
-// ---------------------------------------------------------------------------
-// Tiled matrix multiplication — 32x32 output tile, 1 element per thread
-//
-// blockDim = (32, 32) = 1024 threads = the per-block maximum.
-// Each thread owns exactly one output element: output[row][col].
-//
-// Inner tile step: TILE_K = 32 (columns of A / rows of B per iteration).
-//
-// Shared memory per block:
-//   sA[32][32] = 4 KB  (TILE_HEIGHT rows x TILE_K cols of A)
-//   sB[32][32] = 4 KB  (TILE_K rows x TILE_WIDTH cols of B)
-//   Total: 8 KB — well within the 48 KB limit.
-//
-// Loading: 1024 threads, 1024 elements in each tile -> 1 load per thread,
-// no conditionals, no idle threads, perfectly symmetric.
-//
-// Arithmetic intensity: T/4 = 32/4 = 8 FLOPs/byte (vs 2 for the old 8x8 tile).
-// ---------------------------------------------------------------------------
-
-static constexpr int TILE_HEIGHT = 64;
-static constexpr int TILE_WIDTH  = 64;
-static constexpr int TILE_K      = 64;
+static constexpr int TILE_H      = 32;
+static constexpr int TILE_W      = 32;
+static constexpr int TILE_K      = 32;
+static constexpr int NUM_BATCH   = 4;
+static constexpr int TILE_K_STEP = TILE_K * NUM_BATCH;
 
 __global__ void matmul_tiled_kernel(float* A, float* B, float* output, int M, int N, int K) {
+    /* 
+    VERSION 1
     __shared__ float sA[TILE_HEIGHT][TILE_K];   // [32][32]
     __shared__ float sB[TILE_K][TILE_WIDTH];    // [32][32]
 
@@ -77,21 +62,44 @@ __global__ void matmul_tiled_kernel(float* A, float* B, float* output, int M, in
     }
 
     output[row * K + col] = val;
+    */
+
+    // VERSION 2
+    __shared__ float sA[TILE_H][TILE_K_STEP];
+    __shared__ float sB[TILE_K_STEP][TILE_W];
+
+    int ty = threadIdx.y, tx = threadIdx.x;
+    int row = blockIdx.y * TILE_H + ty;
+    int col = blockIdx.x * TILE_W  + tx;
+
+    float val = 0.0f;
+
+    for (int t = 0; t < N / TILE_K_STEP; t++) {
+        int k_base = t * TILE_K_STEP;
+        for (int i = 0; i < NUM_BATCH; i++)
+            sA[ty][tx + i * TILE_W] = A[row * N + k_base + tx + i * TILE_W];
+        for (int i = 0; i < NUM_BATCH; i++)
+            sB[ty + i * TILE_H][tx] = B[(k_base + ty + i * TILE_H) * K + col];
+        __syncthreads();
+        for (int j = 0; j < TILE_K_STEP; j++)
+            val += sA[ty][j] * sB[j][tx];
+        __syncthreads();
+    }
+
+    output[row * K + col] = val;
 }
 
-/// Host launcher for the tiled matmul.
-/// Requires M % 32 == 0, K % 32 == 0, N % 32 == 0.
 void matmul_tiled(float* A, float* B, float* output, int M, int N, int K) {
-    if (M % TILE_HEIGHT != 0 || K % TILE_WIDTH != 0 || N % TILE_K != 0) {
+    if (M % TILE_H != 0 || K % TILE_W != 0 || N % TILE_K_STEP != 0) {
         fprintf(stderr,
-                "matmul_tiled: dimensions must be divisible by %d; got M=%d N=%d K=%d\n",
-                TILE_HEIGHT, M, N, K);
+                "matmul_tiled: dimensions must be divisible by tile size; got M=%d N=%d K=%d\n",
+                M, N, K);
         assert(false);
     }
 
     char label[64];
     snprintf(label, sizeof(label), "matmul_tiled %dx%dx%d", M, N, K);
-    dim3 blockSize(TILE_WIDTH, TILE_HEIGHT);
-    dim3 gridSize(K / TILE_WIDTH, M / TILE_HEIGHT);
+    dim3 blockSize(TILE_W, TILE_H);
+    dim3 gridSize(K / TILE_W, M / TILE_H);
     time_and_print(label, [&]{ matmul_tiled_kernel<<<gridSize, blockSize>>>(A, B, output, M, N, K); });
 }

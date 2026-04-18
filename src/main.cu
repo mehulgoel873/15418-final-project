@@ -104,8 +104,8 @@ static void usage(const char* prog) {
             "Usage: %s [--impl <naive|tiled>] [--check] [N d [iters]]\n"
             "  --impl  which transformer to run (default: naive)\n"
             "  --check check correctness against naive implementation\n"
-            "  N       sequence length        (default: 4096)\n"
-            "  d       embedding dimension    (default: 64)\n"
+            "  N       sequence length        (default: 16384)\n"
+            "  d       embedding dimension    (default: 8192)\n"
             "  iters   benchmark iterations   (default: 10)\n",
             prog);
 }
@@ -114,8 +114,8 @@ int main(int argc, char** argv)
 {
     const char* impl = "naive";
     bool do_check = false;
-    int N     = 4096;
-    int d     = 2048;
+    int N     = 16384;
+    int d     = 8192;
     int iters = 10;
 
     // Parse --impl <name> first, then remaining positional args N d iters.
