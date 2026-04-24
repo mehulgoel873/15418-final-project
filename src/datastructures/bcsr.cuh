@@ -20,8 +20,8 @@ struct BCSR {
     BCSR(const float* host_data, const bool* tile_dense, int M, int N);
     ~BCSR();
 
-    // Not copyable — owns managed memory
-    BCSR(const BCSR&)            = delete;
+    // Shallow copy — safe for passing to CUDA kernels by value (kernel copies don't run the destructor)
+    BCSR(const BCSR&)            = default;
     BCSR& operator=(const BCSR&) = delete;
 
     __host__ __device__ bool is_dense(int bi, int bj) const {

@@ -1,4 +1,5 @@
 #include "matmul.cuh"
+#include "datastructures/bcsr.cuh"
 #include "timing.cuh"
 #include <cassert>
 #include <cstdio>
@@ -102,4 +103,46 @@ void matmul_tiled(float* A, float* B, float* output, int M, int N, int K) {
     dim3 blockSize(TILE_W, TILE_H);
     dim3 gridSize(K / TILE_W, M / TILE_H);
     time_and_print(label, [&]{ matmul_tiled_kernel<<<gridSize, blockSize>>>(A, B, output, M, N, K); });
+}
+
+
+__global__ void matmul_sparse_kernel(BCSR A, float* B, float* output, int K) {
+    __shared__ float sA[TILE_H][TILE_K_STEP];
+    __shared__ float sB[TILE_K_STEP][TILE_W];
+
+    int bi = blockIdx.y, bj = blockIdx.x;
+    int ty = threadIdx.y, tx = threadIdx.x;
+    int out_col = bj * TILE_W + tx;
+    float val = 0.0f;
+
+    int row_start = A.row_ptr[bi], row_end = A.row_ptr[bi + 1];
+
+    for (int k_base = row_start; k_base < row_end; k_base += NUM_BATCH) {
+        for (int i = 0; i < NUM_BATCH; i++) {
+            int k = k_base + i;
+            if (k < row_end) {
+                int bk = A.col_idx[k];
+                sA[ty][tx + i * TILE_W] = A.values[k * TILE_H * TILE_W + ty * TILE_W + tx];
+                sB[ty + i * TILE_H][tx] = B[(bk * TILE_H + ty) * K + out_col];
+            } else {
+                sA[ty][tx + i * TILE_W] = 0.0f;
+                sB[ty + i * TILE_H][tx] = 0.0f;
+            }
+        }
+        __syncthreads();
+        for (int j = 0; j < TILE_K_STEP; j++)
+            val += sA[ty][j] * sB[j][tx];
+        __syncthreads();
+    }
+
+    output[(bi * TILE_H + ty) * K + out_col] = val;
+}
+
+void matmul_sparse(BCSR& A, float* B, float* output, int M, int N, int K) {
+    cudaDeviceSynchronize();
+    char label[64];
+    snprintf(label, sizeof(label), "matmul_sparse %dx%dx%d", M, N, K);
+    dim3 blockSize(TILE_W, TILE_H);
+    dim3 gridSize(K / TILE_W, M / TILE_H);
+    time_and_print(label, [&]{ matmul_sparse_kernel<<<gridSize, blockSize>>>(A, B, output, K); });
 }
