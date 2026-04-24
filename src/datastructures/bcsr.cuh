@@ -17,6 +17,7 @@ struct BCSR {
 
     // tile_dense: flat bool array of shape [M/TILING * N/TILING], indexed by bi*num_block_cols+bj.
     // Caller is responsible for determining sparsity; we do not scan host_data ourselves.
+    // host_data may be null to zero-initialize the dense tiles (useful for output buffers).
     BCSR(const float* host_data, const bool* tile_dense, int M, int N);
     ~BCSR();
 
@@ -38,3 +39,9 @@ struct BCSR {
         return &values[idx * TILING * TILING];
     }
 };
+
+// Compute the tile_dense mask for the product A*B: output tile (bi, bj) is dense
+// iff there exists some bk where A(bi, bk) and B(bk, bj) are both dense.
+// Returns a heap-allocated bool array of size (A.num_block_rows * B.num_block_cols);
+// caller must free() it.
+bool* bcsr_matmul_mask(const BCSR& A, const BCSR& B);
