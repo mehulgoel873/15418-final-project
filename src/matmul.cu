@@ -106,13 +106,15 @@ void matmul_tiled(float* A, float* B, float* output, int M, int N, int K) {
 }
 
 
-__global__ void matmul_sparse_kernel(BCSR A, float* B, float* output, int K) {
+__global__ void matmul_sparse_bcsr_kernel(BCSR A, BCSR B, BCSR output) {
+    int bi = blockIdx.y, bj = blockIdx.x;
+    int out_idx = output.block_idx[bi * output.num_block_cols + bj];
+    if (out_idx < 0) return; // Doestn' exist on output sparse mask
+
     __shared__ float sA[TILE_H][TILE_K_STEP];
     __shared__ float sB[TILE_K_STEP][TILE_W];
 
-    int bi = blockIdx.y, bj = blockIdx.x;
     int ty = threadIdx.y, tx = threadIdx.x;
-    int out_col = bj * TILE_W + tx;
     float val = 0.0f;
 
     int row_start = A.row_ptr[bi], row_end = A.row_ptr[bi + 1];
@@ -122,8 +124,11 @@ __global__ void matmul_sparse_kernel(BCSR A, float* B, float* output, int K) {
             int k = k_base + i;
             if (k < row_end) {
                 int bk = A.col_idx[k];
+                int b_idx = B.block_idx[bk * B.num_block_cols + bj];
                 sA[ty][tx + i * TILE_W] = A.values[k * TILE_H * TILE_W + ty * TILE_W + tx];
-                sB[ty + i * TILE_H][tx] = B[(bk * TILE_H + ty) * K + out_col];
+                sB[ty + i * TILE_H][tx] = (b_idx >= 0)
+                    ? B.values[b_idx * TILE_H * TILE_W + ty * TILE_W + tx]
+                    : 0.0f;
             } else {
                 sA[ty][tx + i * TILE_W] = 0.0f;
                 sB[ty + i * TILE_H][tx] = 0.0f;
@@ -135,14 +140,14 @@ __global__ void matmul_sparse_kernel(BCSR A, float* B, float* output, int K) {
         __syncthreads();
     }
 
-    output[(bi * TILE_H + ty) * K + out_col] = val;
+    output.values[out_idx * TILE_H * TILE_W + ty * TILE_W + tx] = val;
 }
 
-void matmul_sparse(BCSR& A, float* B, float* output, int M, int N, int K) {
+void matmul_sparse_bcsr(BCSR& A, BCSR& B, BCSR& output) {
     cudaDeviceSynchronize();
     char label[64];
-    snprintf(label, sizeof(label), "matmul_sparse %dx%dx%d", M, N, K);
+    snprintf(label, sizeof(label), "matmul_sparse_bcsr %dx%dx%d", A.M, A.N, B.N);
     dim3 blockSize(TILE_W, TILE_H);
-    dim3 gridSize(K / TILE_W, M / TILE_H);
-    time_and_print(label, [&]{ matmul_sparse_kernel<<<gridSize, blockSize>>>(A, B, output, K); });
+    dim3 gridSize(output.num_block_cols, output.num_block_rows);
+    time_and_print(label, [&]{ matmul_sparse_bcsr_kernel<<<gridSize, blockSize>>>(A, B, output); });
 }

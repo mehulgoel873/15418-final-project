@@ -1,4 +1,5 @@
 #include "bcsr.cuh"
+#include <cstdlib>
 #include <cstring>
 #include <vector>
 
@@ -26,10 +27,12 @@ BCSR::BCSR(const float* host_data, const bool* tile_dense, int M, int N)
 
                 int base = blk * T * T;
                 h_values.resize(base + T * T);
-                for (int ti = 0; ti < T; ti++)
-                    memcpy(&h_values[base + ti * T],
-                           &host_data[(bi * T + ti) * N + bj * T],
-                           T * sizeof(float));
+                if (host_data) {
+                    for (int ti = 0; ti < T; ti++)
+                        memcpy(&h_values[base + ti * T],
+                               &host_data[(bi * T + ti) * N + bj * T],
+                               T * sizeof(float));
+                }
             }
         }
     }
@@ -52,4 +55,21 @@ BCSR::~BCSR() {
     cudaFree(row_ptr);
     cudaFree(col_idx);
     cudaFree(values);
+}
+
+bool* bcsr_matmul_mask(const BCSR& A, const BCSR& B) {
+    assert(A.N == B.M);
+    int Mb = A.num_block_rows;
+    int Kb = B.num_block_cols;
+    bool* mask = (bool*)calloc((size_t)Mb * Kb, sizeof(bool));
+    for (int bi = 0; bi < Mb; bi++) {
+        for (int k = A.row_ptr[bi]; k < A.row_ptr[bi + 1]; k++) {
+            int bk = A.col_idx[k];
+            for (int b = B.row_ptr[bk]; b < B.row_ptr[bk + 1]; b++) {
+                int bj = B.col_idx[b];
+                mask[bi * Kb + bj] = true;
+            }
+        }
+    }
+    return mask;
 }

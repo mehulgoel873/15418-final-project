@@ -20,6 +20,22 @@ static void rand_init_device(float* d_ptr, int n)
     free(h);
 }
 
+// Checkerboard sparsity heuristic: zero out every 32x32 tile (bi, bj)
+// where (bi + bj) is even. Leaves a checkerboard of dense tiles, ~50% sparse.
+__global__ void checkerboard_mask_kernel(float* data, int N, int d) {
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+    if (row < N && col < d && (((row / 32) + (col / 32)) & 1) == 0)
+        data[row * d + col] = 0.0f;
+}
+
+static void apply_checkerboard_sparsity(float* d_data, int N, int d) {
+    dim3 block(16, 16);
+    dim3 grid((d + 15) / 16, (N + 15) / 16);
+    checkerboard_mask_kernel<<<grid, block>>>(d_data, N, d);
+    cudaDeviceSynchronize();
+}
+
 // Can also include init from file code here
 
 static void check_correctness(ForwardFn naive_fn, ForwardFn test_fn, int N, int d)
@@ -35,6 +51,9 @@ static void check_correctness(ForwardFn naive_fn, ForwardFn test_fn, int N, int 
     rand_init_device(d_q, N * d);
     rand_init_device(d_k, N * d);
     rand_init_device(d_v, N * d);
+    apply_checkerboard_sparsity(d_q, N, d);
+    apply_checkerboard_sparsity(d_k, N, d);
+    apply_checkerboard_sparsity(d_v, N, d);
 
     naive_fn(d_q, d_k, d_v, d_out_naive, N, d);
     cudaDeviceSynchronize();
@@ -76,6 +95,9 @@ static float benchmark(ForwardFn fn, int N, int d, int iters)
     rand_init_device(q, N * d);
     rand_init_device(k, N * d);
     rand_init_device(v, N * d);
+    apply_checkerboard_sparsity(q, N, d);
+    apply_checkerboard_sparsity(k, N, d);
+    apply_checkerboard_sparsity(v, N, d);
 
     cudaEvent_t t0, t1;
     cudaEventCreate(&t0);

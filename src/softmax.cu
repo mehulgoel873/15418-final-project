@@ -1,4 +1,5 @@
 #include "softmax.cuh"
+#include "datastructures/bcsr.cuh"
 #include "timing.cuh"
 #include <cstdio>
 #include <cstring>
@@ -168,4 +169,47 @@ void softmax_tiled(float* input, float* output, int row_len, int num_rows) {
     dim3 gridSize(1, num_rows);
     size_t smem = (blockSize.x / 32) * sizeof(float);
     time_and_print(label, [&]{ softmax_tiled_kernel<<<gridSize, blockSize, smem>>>(input, output, row_len, num_rows); });
+}
+
+
+__global__ void softmax_bcsr_bcsr_kernel(BCSR input, BCSR output) {
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+    int num_rows = input.M;
+    int row_len  = input.N;
+    if (row >= num_rows || col >= row_len) return;
+
+    int T = BCSR::TILING;
+    int bi_out = row / T, bj_out = col / T;
+    int out_idx = output.block_idx[bi_out * output.num_block_cols + bj_out];
+    if (out_idx < 0) return;
+
+    float max_val = -INFINITY;
+    for (int i = 0; i < row_len; i++) {
+        int bj = i / T;
+        int a_idx = input.block_idx[bi_out * input.num_block_cols + bj];
+        if (a_idx < 0) continue;
+        max_val = fmaxf(max_val, input.values[a_idx * T * T + (row % T) * T + (i % T)]);
+    }
+
+    float sum_exp = 0.0f;
+    for (int i = 0; i < row_len; i++) {
+        int bj = i / T;
+        int a_idx = input.block_idx[bi_out * input.num_block_cols + bj];
+        if (a_idx < 0) continue;
+        sum_exp += expf(input.values[a_idx * T * T + (row % T) * T + (i % T)] - max_val);
+    }
+
+    float x = input.values[input.block_idx[bi_out * input.num_block_cols + bj_out] * T * T
+                           + (row % T) * T + (col % T)];
+    output.values[out_idx * T * T + (row % T) * T + (col % T)] = expf(x - max_val) / sum_exp;
+}
+
+void softmax_bcsr_bcsr(BCSR& input, BCSR& output) {
+    cudaDeviceSynchronize();
+    char label[64];
+    snprintf(label, sizeof(label), "softmax_bcsr_bcsr %dx%d", input.M, input.N);
+    dim3 blockSize(16, 16);
+    dim3 gridSize((input.N + 15) / 16, (input.M + 15) / 16);
+    time_and_print(label, [&]{ softmax_bcsr_bcsr_kernel<<<gridSize, blockSize>>>(input, output); });
 }
