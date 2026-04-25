@@ -3,6 +3,7 @@
 #include "timing.cuh"
 #include <cstdio>
 #include <cstring>
+#include <vector>
 
 /// Naive softmax kernel: output = row-wise softmax(input)
 /// input: row_len x num_rows, output: row_len x num_rows
@@ -172,44 +173,237 @@ void softmax_tiled(float* input, float* output, int row_len, int num_rows) {
 }
 
 
-__global__ void softmax_bcsr_bcsr_kernel(BCSR input, BCSR output) {
-    int row = blockIdx.y * blockDim.y + threadIdx.y;
-    int col = blockIdx.x * blockDim.x + threadIdx.x;
-    int num_rows = input.M;
-    int row_len  = input.N;
-    if (row >= num_rows || col >= row_len) return;
+// Alternative Approach: Dynamic CUDA-managed scheduling
+// Assigns one block per row dynamically using an atomic counter to guarantee load balancing.
+__global__ void softmax_bcsr_bcsr_kernel_dynamic(BCSR input, BCSR output, int* row_counter) {
+    extern __shared__ float shared_mem[];
+    __shared__ int s_row;
 
-    int T = BCSR::TILING;
-    int bi_out = row / T, bj_out = col / T;
-    int out_idx = output.block_idx[bi_out * output.num_block_cols + bj_out];
-    if (out_idx < 0) return;
+    int T = input.TILING;
 
-    float max_val = -INFINITY;
-    for (int i = 0; i < row_len; i++) {
-        int bj = i / T;
-        int a_idx = input.block_idx[bi_out * input.num_block_cols + bj];
-        if (a_idx < 0) continue;
-        max_val = fmaxf(max_val, input.values[a_idx * T * T + (row % T) * T + (i % T)]);
+    while (true) {
+        if (threadIdx.x == 0) s_row = atomicAdd(row_counter, 1);
+        __syncthreads();
+        
+        int row = s_row;
+        if (row >= input.M) break;
+
+        int bi = row / T;
+        int t = row % T;
+        int blk_start = input.row_ptr[bi];
+        int num_blks = input.row_ptr[bi + 1] - blk_start;
+        if (num_blks == 0) continue;
+
+        int N_elem = num_blks * T;
+        
+        // Phase 1: Max reduction (shared memory + warp reduction)
+        float max_val = -INFINITY;
+        for (int idx = threadIdx.x; idx < N_elem; idx += blockDim.x) {
+            int blk = blk_start + (idx / T);
+            int c = idx % T;
+            max_val = fmaxf(max_val, input.values[blk * T * T + t * T + c]);
+        }
+        for (int offset = 16; offset > 0; offset /= 2) max_val = fmaxf(max_val, __shfl_down_sync(0xFFFFFFFF, max_val, offset));
+        if (threadIdx.x % 32 == 0) shared_mem[threadIdx.x / 32] = max_val;
+        __syncthreads();
+        if (threadIdx.x < 32) {
+            max_val = threadIdx.x < (blockDim.x / 32) ? shared_mem[threadIdx.x] : -INFINITY;
+            for (int offset = 16; offset > 0; offset /= 2) {
+                max_val = fmaxf(max_val, __shfl_down_sync(0xFFFFFFFF, max_val, offset));
+            }
+            if (threadIdx.x == 0) {
+                shared_mem[0] = max_val;
+            }
+        }
+        __syncthreads();
+        max_val = shared_mem[0];
+
+        // Phase 2: Exp sum & write
+        float sum_exp = 0.0f;
+        for (int idx = threadIdx.x; idx < N_elem; idx += blockDim.x) {
+            int blk = blk_start + (idx / T);
+            int c = idx % T;
+            float e = expf(input.values[blk * T * T + t * T + c] - max_val);
+            int out_idx = output.block_idx[bi * output.num_block_cols + input.col_idx[blk]];
+            output.values[out_idx * T * T + t * T + c] = e;
+            sum_exp += e;
+        }
+        for (int offset = 16; offset > 0; offset /= 2) sum_exp += __shfl_down_sync(0xFFFFFFFF, sum_exp, offset);
+        if (threadIdx.x % 32 == 0) shared_mem[threadIdx.x / 32] = sum_exp;
+        __syncthreads();
+        if (threadIdx.x < 32) {
+            sum_exp = threadIdx.x < (blockDim.x / 32) ? shared_mem[threadIdx.x] : 0.0f;
+            for (int offset = 16; offset > 0; offset /= 2) {
+                sum_exp += __shfl_down_sync(0xFFFFFFFF, sum_exp, offset);
+            }
+            if (threadIdx.x == 0) {
+                shared_mem[0] = sum_exp;
+            }
+        }
+        __syncthreads();
+        sum_exp = shared_mem[0];
+
+        // Phase 3: Normalize
+        for (int idx = threadIdx.x; idx < N_elem; idx += blockDim.x) {
+            int blk = blk_start + (idx / T);
+            int c = idx % T;
+            int out_idx = output.block_idx[bi * output.num_block_cols + input.col_idx[blk]];
+            output.values[out_idx * T * T + t * T + c] /= sum_exp;
+        }
+        __syncthreads(); // before processing next row in same block
     }
+}
 
-    float sum_exp = 0.0f;
-    for (int i = 0; i < row_len; i++) {
-        int bj = i / T;
-        int a_idx = input.block_idx[bi_out * input.num_block_cols + bj];
-        if (a_idx < 0) continue;
-        sum_exp += expf(input.values[a_idx * T * T + (row % T) * T + (i % T)] - max_val);
+__global__ void softmax_bcsr_bcsr_kernel(BCSR input, BCSR output, const int* row_partitions) {
+    extern __shared__ float shared_mem[];
+
+    int T = input.TILING;
+    int row_start = row_partitions[blockIdx.x];
+    int row_end   = row_partitions[blockIdx.x + 1];
+
+    for (int row = row_start; row < row_end; row++) {
+        int bi = row / T;
+        int t = row % T;
+        
+        int blk_start = input.row_ptr[bi];
+        int num_blks = input.row_ptr[bi + 1] - blk_start;
+        if (num_blks == 0) continue;
+
+        int N_elem = num_blks * T;
+
+        // Phase 1: Max
+        float max_val = -INFINITY;
+        for (int idx = threadIdx.x; idx < N_elem; idx += blockDim.x) {
+            int blk = blk_start + (idx / T);
+            int c = idx % T;
+            max_val = fmaxf(max_val, input.values[blk * T * T + t * T + c]);
+        }
+
+        for (int offset = 16; offset > 0; offset /= 2) {
+            max_val = fmaxf(max_val, __shfl_down_sync(0xFFFFFFFF, max_val, offset));
+        }
+
+        if (threadIdx.x % 32 == 0) {
+            shared_mem[threadIdx.x / 32] = max_val;
+        }
+        __syncthreads();
+
+        if (threadIdx.x < 32) {
+            max_val = threadIdx.x < blockDim.x / 32 ? shared_mem[threadIdx.x] : -INFINITY;
+            for (int offset = 16; offset > 0; offset /= 2) {
+                max_val = fmaxf(max_val, __shfl_down_sync(0xFFFFFFFF, max_val, offset));
+            }
+            if (threadIdx.x == 0) {
+                shared_mem[0] = max_val;
+            }
+        }
+        __syncthreads();
+        max_val = shared_mem[0];
+
+        // Phase 2: Sum Exp
+        float sum_exp = 0.0f;
+        for (int idx = threadIdx.x; idx < N_elem; idx += blockDim.x) {
+            int blk = blk_start + (idx / T);
+            int c = idx % T;
+            int out_idx = output.block_idx[bi * output.num_block_cols + input.col_idx[blk]];
+            float e = expf(input.values[blk * T * T + t * T + c] - max_val);
+            output.values[out_idx * T * T + t * T + c] = e; 
+            sum_exp += e;
+        }
+
+        for (int offset = 16; offset > 0; offset /= 2) {
+            sum_exp += __shfl_down_sync(0xFFFFFFFF, sum_exp, offset);
+        }
+
+        if (threadIdx.x % 32 == 0) {
+            shared_mem[threadIdx.x / 32] = sum_exp;
+        }
+        __syncthreads();
+
+        if (threadIdx.x < 32) {
+            sum_exp = threadIdx.x < blockDim.x / 32 ? shared_mem[threadIdx.x] : 0.0f;
+            for (int offset = 16; offset > 0; offset /= 2) {
+                sum_exp += __shfl_down_sync(0xFFFFFFFF, sum_exp, offset);
+            }
+            if (threadIdx.x == 0) {
+                shared_mem[0] = sum_exp;
+            }
+        }
+        __syncthreads();
+        sum_exp = shared_mem[0];
+
+        // Phase 3: Normalize
+        for (int idx = threadIdx.x; idx < N_elem; idx += blockDim.x) {
+            int blk = blk_start + (idx / T);
+            int c = idx % T;
+            int out_idx = output.block_idx[bi * output.num_block_cols + input.col_idx[blk]];
+            output.values[out_idx * T * T + t * T + c] /= sum_exp;
+        }
+        __syncthreads(); // before processing next row in same block
     }
-
-    float x = input.values[input.block_idx[bi_out * input.num_block_cols + bj_out] * T * T
-                           + (row % T) * T + (col % T)];
-    output.values[out_idx * T * T + (row % T) * T + (col % T)] = expf(x - max_val) / sum_exp;
 }
 
 void softmax_bcsr_bcsr(BCSR& input, BCSR& output) {
     cudaDeviceSynchronize();
-    char label[64];
-    snprintf(label, sizeof(label), "softmax_bcsr_bcsr %dx%d", input.M, input.N);
-    dim3 blockSize(16, 16);
-    dim3 gridSize((input.N + 15) / 16, (input.M + 15) / 16);
-    time_and_print(label, [&]{ softmax_bcsr_bcsr_kernel<<<gridSize, blockSize>>>(input, output); });
+    
+    int num_blocks = 256;
+    int BLOCK_WIDTH = 256;
+    dim3 blockSize(BLOCK_WIDTH, 1);
+    dim3 gridSize(num_blocks, 1);
+    size_t smem = (BLOCK_WIDTH / 32) * sizeof(float);
+
+    if (SOFTMAX_BCSR_USE_DYNAMIC) {
+        int* d_row_counter;
+        cudaMalloc(&d_row_counter, sizeof(int));
+        cudaMemset(d_row_counter, 0, sizeof(int));
+
+        char label[64];
+        snprintf(label, sizeof(label), "softmax_bcsr_bcsr %dx%d (dynamic tiled)", input.M, input.N);
+        
+        time_and_print(label, [&]{ 
+            softmax_bcsr_bcsr_kernel_dynamic<<<gridSize, blockSize, smem>>>(input, output, d_row_counter); 
+        });
+
+        cudaFree(d_row_counter);
+    } else {
+        int M = input.M;
+        int T = input.TILING;
+
+        // Weight metric: number of non-zero elements per row
+        int total_weight = 0;
+        std::vector<int> row_weights(M, 0);
+        for (int row = 0; row < M; row++) {
+            int bi = row / T;
+            int w = input.row_ptr[bi + 1] - input.row_ptr[bi]; // dense blocks
+            row_weights[row] = w;
+            total_weight += w;
+        }
+
+        std::vector<int> partitions(num_blocks + 1, 0);
+        int target_weight = (total_weight + num_blocks - 1) / num_blocks; // ceil div
+        int current_weight = 0;
+        int b_idx = 1;
+
+        for (int row = 0; row < M; row++) {
+            current_weight += row_weights[row];
+            if (current_weight >= target_weight && b_idx < num_blocks) {
+                partitions[b_idx++] = row + 1;
+                current_weight = 0;
+            }
+        }
+        while (b_idx <= num_blocks) partitions[b_idx++] = M;
+
+        int* d_partitions;
+        cudaMalloc(&d_partitions, (num_blocks + 1) * sizeof(int));
+        cudaMemcpy(d_partitions, partitions.data(), (num_blocks + 1) * sizeof(int), cudaMemcpyHostToDevice);
+
+        char label[64];
+        snprintf(label, sizeof(label), "softmax_bcsr_bcsr %dx%d (static tiled)", input.M, input.N);
+        
+        time_and_print(label, [&]{ 
+            softmax_bcsr_bcsr_kernel<<<gridSize, blockSize, smem>>>(input, output, d_partitions); 
+        });
+
+        cudaFree(d_partitions);
+    }
 }
