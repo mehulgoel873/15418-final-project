@@ -3,7 +3,7 @@
 #include <cuda_runtime.h>
 
 struct BCSR {
-    static constexpr int TILING = 32;
+    int TILING;
 
     int M, N;
     int num_block_rows, num_block_cols;
@@ -18,7 +18,7 @@ struct BCSR {
     // tile_dense: flat bool array of shape [M/TILING * N/TILING], indexed by bi*num_block_cols+bj.
     // Caller is responsible for determining sparsity; we do not scan host_data ourselves.
     // host_data may be null to zero-initialize the dense tiles (useful for output buffers).
-    BCSR(const float* host_data, const bool* tile_dense, int M, int N);
+    BCSR(const float* host_data, const bool* tile_dense, int M, int N, int tiling);
     ~BCSR();
 
     // Shallow copy — safe for passing to CUDA kernels by value (kernel copies don't run the destructor)
