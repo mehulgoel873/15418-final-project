@@ -1,6 +1,9 @@
 #pragma once
 #include "datastructures/bcsr.cuh"
 
+// Set to true to use dynamic scheduling (atomic counter), false for static scheduling (weighted partitions)
+constexpr bool SOFTMAX_BCSR_USE_DYNAMIC = false;
+
 void softmax_tiled(float* input, float* output, int row_len, int num_rows);
 void softmax_naive(float* input, float* output, int row_len, int num_rows);
 
