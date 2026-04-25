@@ -7,6 +7,7 @@
 #include "transformer_naive.cuh"
 #include "transformer_tiled_matmul.cuh"
 #include "transformer_tiled.cuh"
+#include "transformer_sparse.cuh"
 #include "timing.cuh"
 
 // q, k, v, output, N, d
@@ -123,12 +124,14 @@ static float benchmark(ForwardFn fn, int N, int d, int iters)
 
 static void usage(const char* prog) {
     fprintf(stderr,
-            "Usage: %s [--impl <naive|tiled>] [--check] [N d [iters]]\n"
-            "  --impl  which transformer to run (default: naive)\n"
-            "  --check check correctness against naive implementation\n"
-            "  N       sequence length        (default: 16384)\n"
-            "  d       embedding dimension    (default: 8192)\n"
-            "  iters   benchmark iterations   (default: 10)\n",
+            "Usage: %s [--impl <naive|tiled|sparse>] [--check] [--sparsity <0.0-1.0>] [--granularity <int>] [N d [iters]]\n"
+            "  --impl        which transformer to run (default: naive)\n"
+            "  --check       check correctness against naive implementation\n"
+            "  --sparsity    percentage of attention tiles that are sparse (default: 0.5)\n"
+            "  --granularity tile size for sparsity (default: 32)\n"
+            "  N             sequence length        (default: 16384)\n"
+            "  d             embedding dimension    (default: 8192)\n"
+            "  iters         benchmark iterations   (default: 10)\n",
             prog);
 }
 
@@ -136,11 +139,13 @@ int main(int argc, char** argv)
 {
     const char* impl = "naive";
     bool do_check = false;
+    float sparsity = 0.5f;
+    int granularity = 32;
     int N     = 16384;
-    int d     = 8192;
+    int d     = 768;
     int iters = 10;
 
-    // Parse --impl <name> first, then remaining positional args N d iters.
+    // Parse arguments (note: N d iters are positional args, must come after flags)
     int pos = 0;
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--impl") == 0) {
@@ -148,6 +153,12 @@ int main(int argc, char** argv)
             impl = argv[i];
         } else if (strcmp(argv[i], "--check") == 0) {
             do_check = true;
+        } else if (strcmp(argv[i], "--sparsity") == 0) {
+            if (++i >= argc) { usage(argv[0]); return 1; }
+            sparsity = atof(argv[i]);
+        } else if (strcmp(argv[i], "--granularity") == 0) {
+            if (++i >= argc) { usage(argv[0]); return 1; }
+            granularity = atoi(argv[i]);
         } else if (strcmp(argv[i], "--help") == 0) {
             usage(argv[0]); return 0;
         } else {
@@ -157,6 +168,15 @@ int main(int argc, char** argv)
                 case 2: iters = atoi(argv[i]); break;
             }
         }
+    }
+
+    // Generate mask for sparse transformer
+    int num_block_rows = N / granularity;
+    int num_block_cols = N / granularity;
+    bool* h_mask = (bool*)malloc(num_block_rows * num_block_cols * sizeof(bool));
+    for (int i = 0; i < num_block_rows * num_block_cols; i++) {
+        // threshold based: if random float is > sparsity, tile is dense
+        h_mask[i] = ((float)rand() / RAND_MAX) > sparsity;
     }
 
     if (do_check && strcmp(impl, "naive") != 0) {
@@ -176,6 +196,12 @@ int main(int argc, char** argv)
             TransformerTiled t;
             auto test_fn = [&](float* q, float* k, float* v, float* out, int N, int d) {
                 t.forward(q, k, v, out, N, d);
+            };
+            check_correctness(naive_fn, test_fn, N, d);
+        } else if (strcmp(impl, "sparse") == 0) {
+            TransformerSparse t;
+            auto test_fn = [&](float* q, float* k, float* v, float* out, int N, int d) {
+                t.forward(q, k, v, out, N, d, h_mask, granularity);
             };
             check_correctness(naive_fn, test_fn, N, d);
         }
@@ -214,10 +240,21 @@ int main(int argc, char** argv)
         printf("%-28s  %10s\n", "Implementation", "ms/iter");
         printf("%-28s  %10s\n", "----------------------------", "----------");
         printf("%-28s  %10.3f\n", "Transformer Tiled", ms);
+    } else if (strcmp(impl, "sparse") == 0) {
+        TransformerSparse t;
+        float ms = benchmark([&](float* q, float* k, float* v, float* out, int N, int d) {
+            t.forward(q, k, v, out, N, d, h_mask, granularity);
+        }, N, d, iters);
+
+        printf("N=%-6d  d=%-6d  iters=%d\n\n", N, d, iters);
+        printf("%-28s  %10s\n", "Implementation", "ms/iter");
+        printf("%-28s  %10s\n", "----------------------------", "----------");
+        printf("%-28s  %10.3f\n", "Transformer Sparse", ms);
     } else {
-        fprintf(stderr, "Unknown impl '%s'. Choose: naive, tiled_matmul, tiled\n", impl);
+        fprintf(stderr, "Unknown impl '%s'. Choose: naive, tiled_matmul, tiled, sparse\n", impl);
         usage(argv[0]); return 1;
     }
 
+    free(h_mask);
     return 0;
 }
