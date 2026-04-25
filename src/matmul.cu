@@ -151,3 +151,13 @@ void matmul_sparse_bcsr(BCSR& A, BCSR& B, BCSR& output) {
     dim3 gridSize(output.num_block_cols, output.num_block_rows);
     time_and_print(label, [&]{ matmul_sparse_bcsr_kernel<<<gridSize, blockSize>>>(A, B, output); });
 }
+
+
+// One thread per element: mat[i,j] *= mask[i,j].
+__global__ void elemwise_mul_kernel(float* mat, const float* mask, int n) {
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+    if (row >= n || col >= n) return;
+    int idx = row * n + col;
+    mat[idx] *= mask[idx];
+}
