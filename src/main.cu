@@ -6,8 +6,6 @@
 #include <functional>
 
 #include "transformer_naive.cuh"
-#include "transformer_tiled_matmul.cuh"
-#include "transformer_tiled.cuh"
 #include "transformer_sparse.cuh"
 #include "timing.cuh"
 
@@ -32,13 +30,13 @@ __global__ void expand_block_mask_kernel(float* mask, const unsigned char* block
     if (row >= n || col >= n) return;
     int br = row / granularity;
     int bc = col / granularity;
-    mask[row * n + col] = block_is_inf[br * num_blocks + bc] ? -INFINITY : 1.0f;
+    mask[row * n + col] = block_is_inf[br * num_blocks + bc] ? -INFINITY : 0.0f;
 }
 
-// Fills `mask` (device memory, n x n) with a random block-structured mask.
-// Each (granularity x granularity) tile is independently set to -inf with
-// probability p, otherwise 1.0. Block decisions are drawn on the host with
-// rand(), uploaded once, then expanded by a kernel. Assumes n % granularity == 0.
+// Fills `mask` (device memory, n x n) with a random block-structured additive
+// mask. Each (granularity x granularity) tile is independently set to -inf
+// with probability p, otherwise 0.0. Designed to be added to attention scores
+// before softmax (standard masking). Assumes n % granularity == 0.
 static void get_rand_mask(float* mask, float p, int granularity, int n) {
     int num_blocks = n / granularity;
     size_t nb2 = (size_t)num_blocks * num_blocks;
@@ -60,42 +58,6 @@ static void get_rand_mask(float* mask, float p, int granularity, int n) {
     cudaFree(d_blocks);
 }
 
-// One thread per element: mat[i,j] *= mask[i,j].
-__global__ void elemwise_mul_kernel(float* mat, const float* mask, int n) {
-    int row = blockIdx.y * blockDim.y + threadIdx.y;
-    int col = blockIdx.x * blockDim.x + threadIdx.x;
-    if (row >= n || col >= n) return;
-    int idx = row * n + col;
-    mat[idx] *= mask[idx];
-}
-
-// In-place elementwise multiply of two n x n device matrices: mat *= mask.
-// Used to apply a mask produced by get_rand_mask (1.0 keeps, -inf zeros-out
-// after softmax when added to logits, or propagates -inf if multiplied here).
-static void apply_rand_mask(float* mat, float* mask, int n) {
-    dim3 block(16, 16);
-    dim3 grid((n + 15) / 16, (n + 15) / 16);
-    elemwise_mul_kernel<<<grid, block>>>(mat, mask, n);
-    cudaDeviceSynchronize();
-}
-
-// Checkerboard sparsity heuristic: zero out every 32x32 tile (bi, bj)
-// where (bi + bj) is even. Leaves a checkerboard of dense tiles, ~50% sparse.
-__global__ void checkerboard_mask_kernel(float* data, int N, int d) {
-    int row = blockIdx.y * blockDim.y + threadIdx.y;
-    int col = blockIdx.x * blockDim.x + threadIdx.x;
-    if (row < N && col < d && (((row / 32) + (col / 32)) & 1) == 0)
-        data[row * d + col] = 0.0f;
-}
-
-static void apply_checkerboard_sparsity(float* d_data, int N, int d) {
-    dim3 block(16, 16);
-    dim3 grid((d + 15) / 16, (N + 15) / 16);
-    checkerboard_mask_kernel<<<grid, block>>>(d_data, N, d);
-    cudaDeviceSynchronize();
-}
-
-// Can also include init from file code here
 
 static void check_correctness(ForwardFn naive_fn, ForwardFn test_fn, int N, int d, float p, int sparse_granularity)
 {
@@ -172,7 +134,7 @@ static float benchmark(ForwardFn fn, int N, int d, float p, int sparse_granulari
 
 static void usage(const char* prog) {
     fprintf(stderr,
-            "Usage: %s [--impl <naive|tiled|sparse>] [--check] [--sparsity <0.0-1.0>] [--granularity <int>] [--seed <int>] [N d [iters]]\n"
+            "Usage: %s [--impl <naive|sparse>] [--check] [--sparsity <0.0-1.0>] [--granularity <int>] [--seed <int>] [N d [iters]]\n"
             "  --impl        which transformer to run (default: naive)\n"
             "  --check       check correctness against naive implementation\n"
             "  --sparsity    percentage of attention tiles that are sparse (default: 0.5)\n"
@@ -230,25 +192,13 @@ int main(int argc, char** argv)
 
     if (do_check && strcmp(impl, "naive") != 0) {
         printf("Running correctness check against 'naive'...\n");
-        TransformerNaive naive_t;
+        TransformerNaive naive_t(d);
         auto naive_fn = [&](float* x, float* mask, float* out, int N, int d, int g) {
             naive_t.forward(x, mask, out, N, d, g);
         };
 
-        if (strcmp(impl, "tiled_matmul") == 0) {
-            TransformerTiledMatmul t;
-            auto test_fn = [&](float* x, float* mask, float* out, int N, int d, int g) {
-                t.forward(x, mask, out, N, d, g);
-            };
-            check_correctness(naive_fn, test_fn, N, d, sparsity, granularity);
-        } else if (strcmp(impl, "tiled") == 0) {
-            TransformerTiled t;
-            auto test_fn = [&](float* x, float* mask, float* out, int N, int d, int g) {
-                t.forward(x, mask, out, N, d, g);
-            };
-            check_correctness(naive_fn, test_fn, N, d, sparsity, granularity);
-        } else if (strcmp(impl, "sparse") == 0) {
-            TransformerSparse t;
+        if (strcmp(impl, "sparse") == 0) {
+            TransformerSparse t(d);
             auto test_fn = [&](float* x, float* mask, float* out, int N, int d, int g) {
                 t.forward(x, mask, out, N, d, g);
             };
@@ -264,31 +214,19 @@ int main(int argc, char** argv)
 
     // Each lambda matches ForwardFn: (x, mask, output, N, d, granularity).
     if (strcmp(impl, "naive") == 0) {
-        TransformerNaive t;
+        TransformerNaive t(d);
         display_name = "TransformerNaive";
         ms = benchmark([&](float* x, float* mask, float* out, int N, int d, int g) {
             t.forward(x, mask, out, N, d, g);
         }, N, d, sparsity, granularity, iters);
-    } else if (strcmp(impl, "tiled_matmul") == 0) {
-        TransformerTiledMatmul t;
-        display_name = "Transformer Tiled Matmul";
-        ms = benchmark([&](float* x, float* mask, float* out, int N, int d, int g) {
-            t.forward(x, mask, out, N, d, g);
-        }, N, d, sparsity, granularity, iters);
-    } else if (strcmp(impl, "tiled") == 0) {
-        TransformerTiled t;
-        display_name = "Transformer Tiled";
-        ms = benchmark([&](float* x, float* mask, float* out, int N, int d, int g) {
-            t.forward(x, mask, out, N, d, g);
-        }, N, d, sparsity, granularity, iters);
     } else if (strcmp(impl, "sparse") == 0) {
-        TransformerSparse t;
+        TransformerSparse t(d);
         display_name = "Transformer Sparse";
         ms = benchmark([&](float* x, float* mask, float* out, int N, int d, int g) {
             t.forward(x, mask, out, N, d, g);
         }, N, d, sparsity, granularity, iters);
     } else {
-        fprintf(stderr, "Unknown impl '%s'. Choose: naive, tiled_matmul, tiled, sparse\n", impl);
+        fprintf(stderr, "Unknown impl '%s'. Choose: naive, sparse\n", impl);
         usage(argv[0]); return 1;
     }
 
