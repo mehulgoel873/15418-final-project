@@ -3,13 +3,12 @@
 #include <cstring>
 #include <vector>
 
-static constexpr int T = BCSR::TILING;
-
-BCSR::BCSR(const float* host_data, const bool* tile_dense, int M, int N)
-    : M(M), N(N),
-      num_block_rows(M / T),
-      num_block_cols(N / T)
+BCSR::BCSR(const float* host_data, const bool* tile_dense, int M, int N, int tiling)
+    : TILING(tiling), M(M), N(N),
+      num_block_rows(M / tiling),
+      num_block_cols(N / tiling)
 {
+    int T = TILING;
     int total_blocks = num_block_rows * num_block_cols;
 
     std::vector<int> h_block_idx(total_blocks, -1);
