@@ -20,6 +20,13 @@ __global__ void matmul_kernel(float* A, float* B, float* output, int M, int N, i
 }
 
 
+// PLACEHOLDER: SpMM (sparse BCSR A x dense B -> dense output). Not yet
+// implemented; zeros the output so callers (transformer_sparse, tests) link
+// and run end-to-end. Real implementation tracked alongside SDDMM.
+void matmul_sparse(BCSR& /*A*/, float* /*B*/, float* output, int M, int N, int /*K*/) {
+    cudaMemset(output, 0, (size_t)M * N * sizeof(float));
+}
+
 /// Host launcher for the naive matmul kernel.
 void matmul_naive(float* A, float* B, float* output, int M, int N, int K) {
     char label[64];
@@ -160,4 +167,15 @@ __global__ void elemwise_mul_kernel(float* mat, const float* mask, int n) {
     if (row >= n || col >= n) return;
     int idx = row * n + col;
     mat[idx] *= mask[idx];
+}
+
+
+// In-place elementwise multiply of two n x n device matrices: mat *= mask.
+// Used to apply a mask produced by get_rand_mask (1.0 keeps, -inf zeros-out
+// after softmax when added to logits, or propagates -inf if multiplied here).
+static void elementwise_mul(float* mat, float* mask, int n) {
+    dim3 block(16, 16);
+    dim3 grid((n + 15) / 16, (n + 15) / 16);
+    elemwise_mul_kernel<<<grid, block>>>(mat, mask, n);
+    cudaDeviceSynchronize();
 }

@@ -9,3 +9,4 @@ void matmul_sparse(BCSR& A, float* B, float* output, int M, int N, int K);
 // sparsity pattern returned by bcsr_matmul_mask(A, B); this kernel only
 // fills values for tiles already marked dense in `output`.
 void matmul_sparse_bcsr(BCSR& A, BCSR& B, BCSR& output);
+
