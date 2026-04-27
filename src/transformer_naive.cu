@@ -13,7 +13,7 @@ static void rand_init_device_buf(float* d_ptr, int n) {
     free(h);
 }
 
-__global__ static void transpose_kernel(float* input, float* output, int rows, int cols) {
+__global__ void transpose_kernel(float* input, float* output, int rows, int cols) {
     int row = blockIdx.y * blockDim.y + threadIdx.y;
     int col = blockIdx.x * blockDim.x + threadIdx.x;
     if (row < rows && col < cols) {
@@ -21,7 +21,7 @@ __global__ static void transpose_kernel(float* input, float* output, int rows, i
     }
 }
 
-__global__ static void scale_kernel(float* matrix, int N, int d) {
+__global__ void scale_kernel(float* matrix, int N, int d) {
     int row_idx = blockIdx.y * blockDim.y + threadIdx.y;
     int col_idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (row_idx < N && col_idx < N) {
@@ -30,7 +30,7 @@ __global__ static void scale_kernel(float* matrix, int N, int d) {
 }
 
 // scores[i] += mask[i] for i in [0, N*N). Mask is {0, -inf} additive.
-__global__ static void add_mask_kernel(float* scores, const float* mask, int N) {
+__global__ void add_mask_kernel(float* scores, const float* mask, int N) {
     int row = blockIdx.y * blockDim.y + threadIdx.y;
     int col = blockIdx.x * blockDim.x + threadIdx.x;
     if (row < N && col < N) {
