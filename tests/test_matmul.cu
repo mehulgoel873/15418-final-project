@@ -66,9 +66,10 @@ static float run_sparse_test(int M, int N, int K, float sparsity) {
     size_t bytes_B   = (size_t)N * K * sizeof(float);
     size_t bytes_out = (size_t)M * K * sizeof(float);
 
-    int num_block_rows = M / BCSR::TILING;
-    int num_block_cols = N / BCSR::TILING;
-    int T = BCSR::TILING;
+    constexpr int TILING = 32;
+    int num_block_rows = M / TILING;
+    int num_block_cols = N / TILING;
+    int T = TILING;
 
     float* h_A = (float*)calloc(M * N, sizeof(float));
     float* h_B = (float*)malloc(bytes_B);
@@ -87,7 +88,7 @@ static float run_sparse_test(int M, int N, int K, float sparsity) {
         }
     }
 
-    BCSR bcsr(h_A, tile_dense, M, N);
+    BCSR bcsr(h_A, tile_dense, M, N, TILING);
     free(tile_dense);
 
     float *d_A, *d_B, *d_naive, *d_sparse;
