@@ -17,20 +17,33 @@ BCSR::BCSR(const float* host_data, const bool* tile_dense, int M, int N, int til
     std::vector<float> h_values;
 
     for (int bi = 0; bi < num_block_rows; bi++) {
-        h_row_ptr[bi] = (int)h_col_idx.size();
+        int row_start = (int)h_col_idx.size();
+        h_row_ptr[bi] = row_start;
+
+        // Pass 1: assign block indices + column-block indices for this row.
         for (int bj = 0; bj < num_block_cols; bj++) {
             if (tile_dense[bi * num_block_cols + bj]) {
                 int blk = (int)h_col_idx.size();
                 h_block_idx[bi * num_block_cols + bj] = blk;
                 h_col_idx.push_back(bj);
+            }
+        }
+        int K = (int)h_col_idx.size() - row_start;
+        if (K == 0) continue;
 
-                int base = blk * T * T;
-                h_values.resize(base + T * T);
-                if (host_data) {
-                    for (int ti = 0; ti < T; ti++)
-                        memcpy(&h_values[base + ti * T],
-                               &host_data[(bi * T + ti) * N + bj * T],
-                               T * sizeof(float));
+        // Reserve K*T*T floats for this block-row's strip (zero-init by default).
+        size_t base = (size_t)row_start * T * T;
+        h_values.resize(base + (size_t)K * T * T);
+
+        // Pass 2: copy host data into the row-interleaved strip — row ti of
+        // local tile j sits at base + ti*(K*T) + j*T.
+        if (host_data) {
+            for (int j = 0; j < K; j++) {
+                int bj = h_col_idx[row_start + j];
+                for (int ti = 0; ti < T; ti++) {
+                    memcpy(&h_values[base + (size_t)ti * K * T + (size_t)j * T],
+                           &host_data[(bi * T + ti) * N + bj * T],
+                           T * sizeof(float));
                 }
             }
         }

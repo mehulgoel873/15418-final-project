@@ -20,11 +20,91 @@ __global__ void matmul_kernel(float* A, float* B, float* output, int M, int N, i
 }
 
 
-// PLACEHOLDER: SpMM (sparse BCSR A x dense B -> dense output). Not yet
-// implemented; zeros the output so callers (transformer_sparse, tests) link
-// and run end-to-end. Real implementation tracked alongside SDDMM.
-void matmul_sparse(BCSR& /*A*/, float* /*B*/, float* output, int M, int N, int /*K*/) {
-    cudaMemset(output, 0, (size_t)M * N * sizeof(float));
+// SpMM: sparse BCSR A (M x N) * dense B (N x K) -> dense output (M x K).
+// One block per scalar row of A, BN output columns per block. Each block walks
+// its row's K_b * T scalar nonzeros in chunks of TK = 32, gathers the
+// corresponding B-rows into shared memory, and accumulates into a per-thread
+// register. Synchronous version (no cp.async) — see plan for the pipelined
+// follow-up.
+constexpr int SPMM_BN = 128;
+constexpr int SPMM_TK = 32;
+
+__global__ void spmm_bcsr_kernel(BCSR A, const float* __restrict__ B,
+                                 float* __restrict__ output,
+                                 int M, int K) {
+    const int r        = blockIdx.x;                  // scalar row of A
+    const int col_tile = blockIdx.y * SPMM_BN;        // first output col handled
+    const int tid      = threadIdx.x;                 // also output col offset
+
+    const int T   = A.TILING;
+    const int bi  = r / T;
+    const int ti  = r % T;
+    const int K_b = A.block_row_K(bi);
+    const bool active_col = (col_tile + tid) < K;
+
+    if (K_b == 0) {
+        if (active_col) output[(size_t)r * K + col_tile + tid] = 0.0f;
+        return;
+    }
+
+    const int    nnz            = K_b * T;
+    const size_t row_strip_base = A.block_row_base(bi) + (size_t)ti * K_b * T;
+    const int    row_ptr_base   = A.row_ptr[bi];
+
+    __shared__ float sA_val[SPMM_TK];
+    __shared__ int   sA_col[SPMM_TK];
+    __shared__ float sB[SPMM_TK][SPMM_BN + 4];   // +4 padding kills bank conflicts
+
+    float acc = 0.0f;
+    const int num_chunks = (nnz + SPMM_TK - 1) / SPMM_TK;
+
+    for (int chunk = 0; chunk < num_chunks; chunk++) {
+        const int p_start    = chunk * SPMM_TK;
+        const int chunk_size = min(SPMM_TK, nnz - p_start);
+
+        // A-load: first warp pulls 32 contiguous scalars from this row's strip.
+        // Lanes that fall past the row's tail pad with zero so the FMA is a no-op.
+        if (tid < SPMM_TK) {
+            if (tid < chunk_size) {
+                int p = p_start + tid;
+                sA_val[tid] = A.values[row_strip_base + p];
+                sA_col[tid] = A.col_idx[row_ptr_base + (p / T)] * T + (p % T);
+            } else {
+                sA_val[tid] = 0.0f;
+                sA_col[tid] = 0;
+            }
+        }
+        __syncthreads();
+
+        // B-gather: each thread loads its column from each of the chunk's 32
+        // B-rows. Coalesced across the warp; predicated for the K-tail.
+        for (int t = 0; t < SPMM_TK; t++) {
+            float v = 0.0f;
+            if (t < chunk_size && active_col) {
+                v = B[(size_t)sA_col[t] * K + col_tile + tid];
+            }
+            sB[t][tid] = v;
+        }
+        __syncthreads();
+
+        #pragma unroll
+        for (int t = 0; t < SPMM_TK; t++) {
+            acc += sA_val[t] * sB[t][tid];
+        }
+        __syncthreads();   // before next iteration overwrites sA/sB
+    }
+
+    if (active_col) output[(size_t)r * K + col_tile + tid] = acc;
+}
+
+void matmul_sparse(BCSR& A, float* B, float* output, int M, int N, int K) {
+    assert(A.M == M && A.N == N);
+    cudaDeviceSynchronize();
+    char label[64];
+    snprintf(label, sizeof(label), "matmul_sparse %dx%dx%d", M, N, K);
+    dim3 grid(M, (K + SPMM_BN - 1) / SPMM_BN);
+    dim3 block(SPMM_BN);
+    time_and_print(label, [&]{ spmm_bcsr_kernel<<<grid, block>>>(A, B, output, M, K); });
 }
 
 /// Host launcher for the naive matmul kernel.
