@@ -97,11 +97,11 @@ __global__ void spmm_bcsr_kernel(BCSR A, const float* __restrict__ B,
     if (active_col) output[(size_t)r * K + col_tile + tid] = acc;
 }
 
-void matmul_sparse(BCSR& A, float* B, float* output, int M, int N, int K) {
+void spmm(BCSR& A, float* B, float* output, int M, int N, int K) {
     assert(A.M == M && A.N == N);
     cudaDeviceSynchronize();
     char label[64];
-    snprintf(label, sizeof(label), "matmul_sparse %dx%dx%d", M, N, K);
+    snprintf(label, sizeof(label), "spmm %dx%dx%d", M, N, K);
     dim3 grid(M, (K + SPMM_BN - 1) / SPMM_BN);
     dim3 block(SPMM_BN);
     time_and_print(label, [&]{ spmm_bcsr_kernel<<<grid, block>>>(A, B, output, M, K); });
