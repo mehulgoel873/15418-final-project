@@ -4,6 +4,19 @@
 
 class TransformerSparse {
 public:
-    // mask: a host-side flat boolean array of shape [N/granularity * N/granularity]
-    void forward(float* q, float* k, float* v, float* output, int N, int d, const bool* mask, int granularity);
+    // Allocates and randomly initializes W_q, W_k, W_v (each d x d) on device.
+    explicit TransformerSparse(int d);
+    ~TransformerSparse();
+
+    // x: input embeddings, shape N x d (device).
+    // mask: dense N x N additive mask in {0, -INFINITY} (device).
+    // output: shape N x d (device).
+    // granularity: BCSR tile size used for the final probs @ V spmm.
+    void forward(float* x, float* mask, float* output, int N, int d, int granularity);
+
+private:
+    float* d_W_q;
+    float* d_W_k;
+    float* d_W_v;
+    int    d_dim;
 };
