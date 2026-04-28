@@ -3,7 +3,6 @@
 
 void matmul_tiled(float* A, float* B, float* output, int M, int N, int K);
 void matmul_naive(float* A, float* B, float* output, int M, int N, int K);
-void matmul_sparse(BCSR& A, float* B, float* output, int M, int N, int K);
 void spmm(BCSR& A, float* B, float* output, int M, int N, int K);
 
 // BCSR x BCSR -> BCSR. The caller must preconstruct `output` with the

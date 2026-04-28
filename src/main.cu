@@ -140,8 +140,8 @@ static void usage(const char* prog) {
             "  --sparsity    percentage of attention tiles that are sparse (default: 0.5)\n"
             "  --granularity tile size for sparsity (default: 32)\n"
             "  --seed        RNG seed for reproducible inputs/masks (default: time(NULL))\n"
-            "  N             sequence length        (default: 16384)\n"
-            "  d             embedding dimension    (default: 8192)\n"
+            "  N             sequence length        (default: 1024)\n"
+            "  d             embedding dimension    (default: 128)\n"
             "  iters         benchmark iterations   (default: 10)\n",
             prog);
 }
@@ -152,8 +152,8 @@ int main(int argc, char** argv)
     bool do_check = false;
     float sparsity = 0.5f;
     int granularity = 32;
-    int N     = 16384;
-    int d     = 768;
+    int N     = 1024;
+    int d     = 128;
     int iters = 10;
     unsigned int seed = (unsigned int)time(NULL);
     bool seed_set = false;
@@ -192,12 +192,16 @@ int main(int argc, char** argv)
 
     if (do_check && strcmp(impl, "naive") != 0) {
         printf("Running correctness check against 'naive'...\n");
+        // Re-seed before each constructor so both transformers consume the
+        // same RNG stream and end up with identical W_q/W_k/W_v weights.
+        srand(seed);
         TransformerNaive naive_t(d);
         auto naive_fn = [&](float* x, float* mask, float* out, int N, int d, int g) {
             naive_t.forward(x, mask, out, N, d, g);
         };
 
         if (strcmp(impl, "sparse") == 0) {
+            srand(seed);
             TransformerSparse t(d);
             auto test_fn = [&](float* x, float* mask, float* out, int N, int d, int g) {
                 t.forward(x, mask, out, N, d, g);
