@@ -1,6 +1,11 @@
 #pragma once
 #include <cuda_runtime.h>
 
+// Shared helper kernels — also used by TransformerSparse.
+__global__ void transpose_kernel(float* input, float* output, int rows, int cols);
+__global__ void scale_kernel(float* matrix, int N, int d);
+__global__ void add_mask_kernel(float* scores, const float* mask, int N);
+
 class TransformerNaive {
 public:
     // Allocates and randomly initializes W_q, W_k, W_v (each d x d) on device.
