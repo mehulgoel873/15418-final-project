@@ -101,7 +101,7 @@ static float run_sparse_test(int M, int N, int K, float sparsity) {
     cudaMemcpy(d_B, h_B, bytes_B, cudaMemcpyHostToDevice);
 
     matmul_naive(d_A, d_B, d_naive, M, N, K);
-    matmul_sparse(bcsr, d_B, d_sparse, M, N, K);
+    spmm(bcsr, d_B, d_sparse, M, N, K);
     cudaDeviceSynchronize();
 
     float* h_naive  = (float*)malloc(bytes_out);
