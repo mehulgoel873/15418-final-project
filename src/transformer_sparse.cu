@@ -6,6 +6,7 @@
 #include <cuda_runtime.h>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <math.h>
 
 static void rand_init_device_buf(float* d_ptr, int n) {
@@ -57,15 +58,11 @@ TransformerSparse::~TransformerSparse() {
 }
 
 void TransformerSparse::forward(float* x, float* mask, float* output, int N, int d, int granularity) {
-    float *Q, *K, *V, *K_T, *scores, *probs;
-    size_t tok_bytes  = (size_t)N * d * sizeof(float);
-    size_t attn_bytes = (size_t)N * N * sizeof(float);
-    if (cudaMalloc(&Q,      tok_bytes)  != cudaSuccess ||
-        cudaMalloc(&K,      tok_bytes)  != cudaSuccess ||
-        cudaMalloc(&V,      tok_bytes)  != cudaSuccess ||
-        cudaMalloc(&K_T,    tok_bytes)  != cudaSuccess ||
-        cudaMalloc(&scores, attn_bytes) != cudaSuccess ||
-        cudaMalloc(&probs,  attn_bytes) != cudaSuccess) {
+    float *Q, *K, *V;
+    size_t tok_bytes = (size_t)N * d * sizeof(float);
+    if (cudaMalloc(&Q, tok_bytes) != cudaSuccess ||
+        cudaMalloc(&K, tok_bytes) != cudaSuccess ||
+        cudaMalloc(&V, tok_bytes) != cudaSuccess) {
         fprintf(stderr, "cudaMalloc failed: N=%d d=%d\n", N, d);
         return;
     }
@@ -75,37 +72,21 @@ void TransformerSparse::forward(float* x, float* mask, float* output, int N, int
     matmul_tiled(x, d_W_k, K, N, d, d);
     matmul_tiled(x, d_W_v, V, N, d, d);
 
-    // K^T: (N x d) -> (d x N)
-    dim3 block16(16, 16);
-    dim3 grid_KT((d + 15) / 16, (N + 15) / 16);
-    transpose_kernel<<<grid_KT, block16>>>(K, K_T, N, d);
-
-    // scores = Q K^T : (N x d) @ (d x N) -> (N x N)
-    matmul_tiled(Q, K_T, scores, N, d, N);
-
-    // scale by 1/sqrt(d)
-    dim3 grid_NN((N + 15) / 16, (N + 15) / 16);
-    scale_kernel<<<grid_NN, block16>>>(scores, N, d);
-
-    // additive mask (mask in {0, -inf})
-    add_mask_kernel<<<grid_NN, block16>>>(scores, mask, N);
-
-    // probs = softmax(scores) row-wise
-    softmax_tiled(scores, probs, N, N);
-
-    // Pack dense probs into BCSR using a tile-mask derived from the additive
-    // mask: tiles that are entirely -INF in `mask` are dropped, since their
-    // softmax outputs are zero and contribute nothing to probs @ V.
+    // Build the BCSR sparsity pattern from the additive mask. SDDMM will only
+    // compute the tiles marked dense — no dense Q @ K^T, no transpose, no
+    // add_mask, no dense softmax. K stays as (N x d) row-major because SDDMM
+    // treats B's rows as the columns of B^T directly.
     bool* tile_dense = build_tile_mask_from_additive(mask, N, granularity);
-    float* h_probs = (float*)malloc(attn_bytes);
-    cudaMemcpy(h_probs, probs, attn_bytes, cudaMemcpyDeviceToHost);
-    BCSR probs_bcsr(h_probs, tile_dense, N, N, granularity);
-    free(h_probs);
+    BCSR scores_bcsr(nullptr, tile_dense, N, N, granularity);
+    BCSR probs_bcsr (nullptr, tile_dense, N, N, granularity);
     free(tile_dense);
+
+    sddmm(Q, K, scores_bcsr, d);
+    scale_bcsr_values(scores_bcsr, 1.0f / sqrtf((float)d));
+    softmax_bcsr_bcsr(scores_bcsr, probs_bcsr);
 
     // attn_out = probs_bcsr @ V : (N x N) sparse @ (N x d) dense -> (N x d) dense
     spmm(probs_bcsr, V, output, N, N, d);
 
-    cudaFree(Q); cudaFree(K); cudaFree(V); cudaFree(K_T);
-    cudaFree(scores); cudaFree(probs);
+    cudaFree(Q); cudaFree(K); cudaFree(V);
 }
