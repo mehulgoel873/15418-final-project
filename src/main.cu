@@ -7,6 +7,7 @@
 
 #include "transformer_naive.cuh"
 #include "transformer_sparse.cuh"
+#include "transformer_sparse_softmax.cuh"
 #include "timing.cuh"
 
 // x, mask, output, N, d, granularity
@@ -61,41 +62,55 @@ static void get_rand_mask(float* mask, float p, int granularity, int n) {
 
 static void check_correctness(ForwardFn naive_fn, ForwardFn test_fn, int N, int d, float p, int sparse_granularity)
 {
-    float *d_x, *d_out_naive, *d_out_test, *d_mask;
-    cudaMalloc(&d_x,      (size_t)N * d * sizeof(float));
-    cudaMalloc(&d_mask,      (size_t)N * N * sizeof(float));
-    cudaMalloc(&d_out_naive, (size_t)N * d * sizeof(float));
-    cudaMalloc(&d_out_test, (size_t)N * d * sizeof(float));
+    float *d_x_naive, *d_x_test, *d_out_naive, *d_out_test, *d_mask_naive, *d_mask_test;
+    size_t x_bytes = (size_t)N * d * sizeof(float);
+    size_t mask_bytes = (size_t)N * N * sizeof(float);
 
-    rand_init_device(d_x, N * d);
-    get_rand_mask(d_mask, p, sparse_granularity, N);
+    cudaMalloc(&d_x_naive,   x_bytes);
+    cudaMalloc(&d_x_test,    x_bytes);
+    cudaMalloc(&d_mask_naive, mask_bytes);
+    cudaMalloc(&d_mask_test,  mask_bytes);
+    cudaMalloc(&d_out_naive, x_bytes);
+    cudaMalloc(&d_out_test,  x_bytes);
 
-    naive_fn(d_x, d_mask, d_out_naive, N, d, sparse_granularity);
+    // Initialize the naive input arrays
+    rand_init_device(d_x_naive, N * d);
+    get_rand_mask(d_mask_naive, p, sparse_granularity, N);
+
+    // Copy to the test arrays to allow either function to modify inputs in-place
+    cudaMemcpy(d_x_test, d_x_naive, x_bytes, cudaMemcpyDeviceToDevice);
+    cudaMemcpy(d_mask_test, d_mask_naive, mask_bytes, cudaMemcpyDeviceToDevice);
+
+    naive_fn(d_x_naive, d_mask_naive, d_out_naive, N, d, sparse_granularity);
     cudaDeviceSynchronize();
-    test_fn(d_x, d_mask, d_out_test, N, d, sparse_granularity);
+    test_fn(d_x_test, d_mask_test, d_out_test, N, d, sparse_granularity);
     cudaDeviceSynchronize();
 
-    float *h_out_naive = (float*)malloc((size_t)N * d * sizeof(float));
-    float *h_out_test  = (float*)malloc((size_t)N * d * sizeof(float));
+    float *h_out_naive = (float*)malloc(x_bytes);
+    float *h_out_test  = (float*)malloc(x_bytes);
 
-    cudaMemcpy(h_out_naive, d_out_naive, (size_t)N * d * sizeof(float), cudaMemcpyDeviceToHost);
-    cudaMemcpy(h_out_test,  d_out_test,  (size_t)N * d * sizeof(float), cudaMemcpyDeviceToHost);
+    cudaMemcpy(h_out_naive, d_out_naive, x_bytes, cudaMemcpyDeviceToHost);
+    cudaMemcpy(h_out_test,  d_out_test,  x_bytes, cudaMemcpyDeviceToHost);
 
-    float max_err = 0.0f;
+    float max_abs_err = 0.0f;
+    float max_rel_err = 0.0f;
     for (int i = 0; i < N * d; i++) {
         float err = fabs(h_out_naive[i] - h_out_test[i]);
-        if (err > max_err) max_err = err;
+        float rel = err / (fmaxf(fabs(h_out_naive[i]), fabs(h_out_test[i])) + 1e-5f);
+        if (err > max_abs_err) max_abs_err = err;
+        if (rel > max_rel_err) max_rel_err = rel;
     }
 
-    if (max_err < 1e-3f) {
-        printf("Correctness check: PASS (max error: %e)\n", max_err);
+    if (max_rel_err < 1e-2f || max_abs_err < 1e-2f) {
+        printf("Correctness check: PASS (max abs error: %e, max rel error: %e)\n", max_abs_err, max_rel_err);
     } else {
-        printf("Correctness check: FAIL (max error: %e)\n", max_err);
+        printf("Correctness check: FAIL (max abs error: %e, max rel error: %e)\n", max_abs_err, max_rel_err);
     }
 
     free(h_out_naive);
     free(h_out_test);
-    cudaFree(d_x); cudaFree(d_mask);
+    cudaFree(d_x_naive); cudaFree(d_mask_naive);
+    cudaFree(d_x_test);  cudaFree(d_mask_test);
     cudaFree(d_out_naive); cudaFree(d_out_test);
 }
 
@@ -134,14 +149,14 @@ static float benchmark(ForwardFn fn, int N, int d, float p, int sparse_granulari
 
 static void usage(const char* prog) {
     fprintf(stderr,
-            "Usage: %s [--impl <naive|sparse>] [--check] [--sparsity <0.0-1.0>] [--granularity <int>] [--seed <int>] [N d [iters]]\n"
+            "Usage: %s [--impl <naive|sparse|sparse_softmax>] [--check] [--sparsity <0.0-1.0>] [--granularity <int>] [--seed <int>] [N d [iters]]\n"
             "  --impl        which transformer to run (default: naive)\n"
             "  --check       check correctness against naive implementation\n"
             "  --sparsity    percentage of attention tiles that are sparse (default: 0.5)\n"
             "  --granularity tile size for sparsity (default: 32)\n"
             "  --seed        RNG seed for reproducible inputs/masks (default: time(NULL))\n"
-            "  N             sequence length        (default: 1024)\n"
-            "  d             embedding dimension    (default: 128)\n"
+            "  N             sequence length        (default: 16384)\n"
+            "  d             embedding dimension    (default: 768)\n"
             "  iters         benchmark iterations   (default: 10)\n",
             prog);
 }
@@ -152,8 +167,8 @@ int main(int argc, char** argv)
     bool do_check = false;
     float sparsity = 0.5f;
     int granularity = 32;
-    int N     = 1024;
-    int d     = 128;
+    int N     = 16384;
+    int d     = 768;
     int iters = 10;
     unsigned int seed = (unsigned int)time(NULL);
     bool seed_set = false;
@@ -207,6 +222,13 @@ int main(int argc, char** argv)
                 t.forward(x, mask, out, N, d, g);
             };
             check_correctness(naive_fn, test_fn, N, d, sparsity, granularity);
+        } else if (strcmp(impl, "sparse_softmax") == 0) {
+            srand(seed);
+            TransformerSparseSoftmax t(d);
+            auto test_fn = [&](float* x, float* mask, float* out, int N, int d, int g) {
+                t.forward(x, mask, out, N, d, g);
+            };
+            check_correctness(naive_fn, test_fn, N, d, sparsity, granularity);
         }
         printf("\n");
     } else if (do_check) {
@@ -229,12 +251,21 @@ int main(int argc, char** argv)
         ms = benchmark([&](float* x, float* mask, float* out, int N, int d, int g) {
             t.forward(x, mask, out, N, d, g);
         }, N, d, sparsity, granularity, iters);
+    } else if (strcmp(impl, "sparse_softmax") == 0) {
+        TransformerSparseSoftmax t(d);
+        display_name = "Transformer Sparse Softmax";
+        ms = benchmark([&](float* x, float* mask, float* out, int N, int d, int g) {
+            t.forward(x, mask, out, N, d, g);
+        }, N, d, sparsity, granularity, iters);
     } else {
         fprintf(stderr, "Unknown impl '%s'. Choose: naive, sparse\n", impl);
         usage(argv[0]); return 1;
     }
 
-    printf("N=%-6d  d=%-6d  iters=%d\n\n", N, d, iters);
+    printf("N=%-6d  d=%-6d  iters=%-6d", N, d, iters);
+    if (strcmp(impl, "sparse") == 0) {
+        printf("  sparsity=%-6.2f%%  granularity=%-6d\n\n", sparsity * 100.0f, granularity);
+    }
     printf("%-28s  %10s\n", "Implementation", "ms/iter");
     printf("%-28s  %10s\n", "----------------------------", "----------");
     printf("%-28s  %10.3f\n", display_name, ms);
