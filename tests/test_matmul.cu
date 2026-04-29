@@ -151,8 +151,15 @@ static float run_sddmm_test(int I, int J, int K, float sparsity, int TILING) {
     sddmm(d_A, d_B, D_gpu, K);
     cudaDeviceSynchronize();
 
-    size_t nvals = (size_t)D_gpu.nnzb * TILING * TILING;
-    float diff = max_abs_diff(D_gpu.values, D_cpu.values, (int)nvals);
+    BCSRView v_gpu = D_gpu.get_view();
+    BCSRView v_cpu = D_cpu.get_view();
+    size_t nvals = (size_t)v_gpu.nnzb * TILING * TILING;
+    float* h_gpu = (float*)malloc(nvals * sizeof(float));
+    float* h_cpu = (float*)malloc(nvals * sizeof(float));
+    cudaMemcpy(h_gpu, v_gpu.values, nvals * sizeof(float), cudaMemcpyDeviceToHost);
+    cudaMemcpy(h_cpu, v_cpu.values, nvals * sizeof(float), cudaMemcpyDeviceToHost);
+    float diff = max_abs_diff(h_gpu, h_cpu, (int)nvals);
+    free(h_gpu); free(h_cpu);
 
     free(h_A); free(h_B);
     cudaFree(d_A); cudaFree(d_B);

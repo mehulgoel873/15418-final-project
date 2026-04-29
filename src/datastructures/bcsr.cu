@@ -53,6 +53,13 @@ BCSRMatrix::BCSRMatrix(const float* host_data, const bool* tile_dense, int M, in
     h_row_ptr[view.num_block_rows] = (int)h_col_idx.size();
     view.nnzb = (int)h_col_idx.size();
 
+    int max_K = 0;
+    for (int bi = 0; bi < view.num_block_rows; bi++) {
+        int k = h_row_ptr[bi + 1] - h_row_ptr[bi];
+        if (k > max_K) max_K = k;
+    }
+    view.max_block_row_K = max_K;
+
     // cudaMalloc instead of cudaMallocManaged to prevent page-faulting
     cudaMalloc(&view.block_idx, total_blocks * sizeof(int));
     cudaMalloc(&view.row_ptr,   (view.num_block_rows + 1) * sizeof(int));

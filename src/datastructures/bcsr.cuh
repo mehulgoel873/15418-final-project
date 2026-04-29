@@ -9,6 +9,7 @@ struct BCSRView {
     int M, N;
     int num_block_rows, num_block_cols;
     int nnzb;
+    int max_block_row_K;   // max over bi of (row_ptr[bi+1] - row_ptr[bi]); set at construction
 
     int*   block_idx;  // [num_block_rows * num_block_cols]: maps (bi,bj) -> block index in values, -1 if sparse
     int*   row_ptr;    // [num_block_rows + 1]: row_ptr[bi]..row_ptr[bi+1] indexes into col_idx for row bi
