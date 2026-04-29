@@ -138,6 +138,7 @@ __global__ void softmax_tiled_kernel(float* input, float* output, int row_len, i
         }
     }
     __syncthreads();
+    
     sum_exp = shared_mem[0];
 
 
@@ -173,91 +174,120 @@ void softmax_tiled(float* input, float* output, int row_len, int num_rows) {
 }
 
 
-// Alternative Approach: Dynamic CUDA-managed scheduling
-// Assigns one block per row dynamically using an atomic counter to guarantee load balancing.
-__global__ void softmax_bcsr_bcsr_kernel_dynamic(BCSR input, BCSR output, int* row_counter) {
+// ---------------------------------------------------------------------------
+// BCSR Softmax - One row per block scheduling
+// Assigns exactly one row per block mapped directly to `blockIdx.x`.
+// Uses __shfl_sync for warp-level reduction, 
+//      shared memory for block-wide reduction, 
+//      chunk processing to handle large numbers of non-zeros (nnz > blockDim.x)
+//
+// Each block processes an entire row in chunks.
+// Shared memory per block: blockDim.x / 32 floats for reduction
+// ---------------------------------------------------------------------------
+__global__ void softmax_bcsr_bcsr_kernel_dynamic(BCSRView input, BCSRView output) {
     extern __shared__ float shared_mem[];
-    __shared__ int s_row;
+
+    int row = blockIdx.x;
+    if (row >= input.M) return;
 
     int T = input.TILING;
+    int bi = row / T;
+    int t = row % T;
+    int blk_start = input.row_ptr[bi];
+    int num_blks = input.row_ptr[bi + 1] - blk_start;
+    if (num_blks == 0) return;
 
-    while (true) {
-        if (threadIdx.x == 0) s_row = atomicAdd(row_counter, 1);
-        __syncthreads();
-        
-        int row = s_row;
-        if (row >= input.M) break;
+    int N_elem = num_blks * T;
+    int row_base_idx = blk_start * T * T + t * num_blks * T;
+    
+    // Phase 1: Max reduction (shared memory + warp reduction)
+    float max_val = -INFINITY;
+    // Chunk processing to handle large rows (N_elem > blockDim.x)
+    for (int idx = threadIdx.x; idx < N_elem; idx += blockDim.x) {
+        float val = input.values[row_base_idx + idx];
+        max_val = fmaxf(max_val, val);
+    }
 
-        int bi = row / T;
-        int t = row % T;
-        int blk_start = input.row_ptr[bi];
-        int num_blks = input.row_ptr[bi + 1] - blk_start;
-        if (num_blks == 0) continue;
+    for (int offset = 16; offset > 0; offset /= 2) {
+        max_val = fmaxf(max_val, __shfl_down_sync(0xFFFFFFFF, max_val, offset));
+    }
 
-        int N_elem = num_blks * T;
-        
-        // Phase 1: Max reduction (shared memory + warp reduction)
-        float max_val = -INFINITY;
-        for (int idx = threadIdx.x; idx < N_elem; idx += blockDim.x) {
-            int blk = blk_start + (idx / T);
-            int c = idx % T;
-            max_val = fmaxf(max_val, input.values[blk * T * T + t * T + c]);
-        }
-        for (int offset = 16; offset > 0; offset /= 2) max_val = fmaxf(max_val, __shfl_down_sync(0xFFFFFFFF, max_val, offset));
-        if (threadIdx.x % 32 == 0) shared_mem[threadIdx.x / 32] = max_val;
-        __syncthreads();
-        if (threadIdx.x < 32) {
-            max_val = threadIdx.x < (blockDim.x / 32) ? shared_mem[threadIdx.x] : -INFINITY;
-            for (int offset = 16; offset > 0; offset /= 2) {
-                max_val = fmaxf(max_val, __shfl_down_sync(0xFFFFFFFF, max_val, offset));
-            }
-            if (threadIdx.x == 0) {
-                shared_mem[0] = max_val;
-            }
-        }
-        __syncthreads();
-        max_val = shared_mem[0];
+    if (threadIdx.x % 32 == 0) {
+        shared_mem[threadIdx.x / 32] = max_val;
+    }
 
-        // Phase 2: Exp sum & write
-        float sum_exp = 0.0f;
-        for (int idx = threadIdx.x; idx < N_elem; idx += blockDim.x) {
-            int blk = blk_start + (idx / T);
-            int c = idx % T;
-            float e = expf(input.values[blk * T * T + t * T + c] - max_val);
-            int out_idx = output.block_idx[bi * output.num_block_cols + input.col_idx[blk]];
-            output.values[out_idx * T * T + t * T + c] = e;
-            sum_exp += e;
-        }
-        for (int offset = 16; offset > 0; offset /= 2) sum_exp += __shfl_down_sync(0xFFFFFFFF, sum_exp, offset);
-        if (threadIdx.x % 32 == 0) shared_mem[threadIdx.x / 32] = sum_exp;
-        __syncthreads();
-        if (threadIdx.x < 32) {
-            sum_exp = threadIdx.x < (blockDim.x / 32) ? shared_mem[threadIdx.x] : 0.0f;
-            for (int offset = 16; offset > 0; offset /= 2) {
-                sum_exp += __shfl_down_sync(0xFFFFFFFF, sum_exp, offset);
-            }
-            if (threadIdx.x == 0) {
-                shared_mem[0] = sum_exp;
-            }
-        }
-        __syncthreads();
-        sum_exp = shared_mem[0];
+    __syncthreads();
 
-        // Phase 3: Normalize
-        for (int idx = threadIdx.x; idx < N_elem; idx += blockDim.x) {
-            int blk = blk_start + (idx / T);
-            int c = idx % T;
-            int out_idx = output.block_idx[bi * output.num_block_cols + input.col_idx[blk]];
-            output.values[out_idx * T * T + t * T + c] /= sum_exp;
+    // Warp 0 Sweep for max reduction in shared memory
+    if (threadIdx.x < 32) {
+        max_val = threadIdx.x < (blockDim.x / 32) ? shared_mem[threadIdx.x] : -INFINITY;
+        for (int offset = 16; offset > 0; offset /= 2) {
+            max_val = fmaxf(max_val, __shfl_down_sync(0xFFFFFFFF, max_val, offset));
         }
-        __syncthreads(); // before processing next row in same block
+        if (threadIdx.x == 0) {
+            shared_mem[0] = max_val;
+        }
+    }
+    __syncthreads();
+
+    max_val = shared_mem[0];
+
+    // Phase 2: Exp sum reduction
+    int out_row_base_idx = output.row_ptr[bi] * T * T + t * num_blks * T;
+    float sum_exp = 0.0f;
+    
+    // Chunk processing for exponential sum
+    for (int idx = threadIdx.x; idx < N_elem; idx += blockDim.x) {
+        float val = input.values[row_base_idx + idx];
+        float e = expf(val - max_val);
+        output.values[out_row_base_idx + idx] = e;
+        sum_exp += e;
+    }
+
+    for (int offset = 16; offset > 0; offset /= 2) {
+        sum_exp += __shfl_down_sync(0xFFFFFFFF, sum_exp, offset);
+    }
+
+    if (threadIdx.x % 32 == 0) {
+        shared_mem[threadIdx.x / 32] = sum_exp;
+    }
+
+    __syncthreads();
+
+    // Warp 0 Sweep for sum reduction in shared memory
+    if (threadIdx.x < 32) {
+        sum_exp = threadIdx.x < (blockDim.x / 32) ? shared_mem[threadIdx.x] : 0.0f;
+        for (int offset = 16; offset > 0; offset /= 2) {
+            sum_exp += __shfl_down_sync(0xFFFFFFFF, sum_exp, offset);
+        }
+        if (threadIdx.x == 0) {
+            shared_mem[0] = sum_exp;
+        }
+    }
+    __syncthreads();
+
+    sum_exp = shared_mem[0];
+
+    // Phase 3: Normalize
+    // Chunk processing for normalization division
+    for (int idx = threadIdx.x; idx < N_elem; idx += blockDim.x) {
+        output.values[out_row_base_idx + idx] /= sum_exp;
     }
 }
 
-__global__ void softmax_bcsr_bcsr_kernel(BCSR input, BCSR output, const int* row_partitions) {
+// ---------------------------------------------------------------------------
+// BCSR Softmax - Static partitioned scheduling
+// Assigns rows to blocks using a precomputed partition array for load balancing based on nnz.
+// Uses __shfl_sync for warp-level reduction, 
+//      shared memory for block-wide reduction, 
+//      chunk processing to handle large numbers of non-zeros (nnz > blockDim.x)
+// ---------------------------------------------------------------------------
+__global__ void softmax_bcsr_bcsr_kernel(BCSRView input, BCSRView output, const int* row_partitions) {
     extern __shared__ float shared_mem[];
 
     int T = input.TILING;
+    // const int LOG_T = __ffs(T) - 1; // log2(T), assuming T is a power of two 
+    // const int MASK_T = T - 1;
     int row_start = row_partitions[blockIdx.x];
     int row_end   = row_partitions[blockIdx.x + 1];
 
@@ -271,13 +301,39 @@ __global__ void softmax_bcsr_bcsr_kernel(BCSR input, BCSR output, const int* row
 
         int N_elem = num_blks * T;
 
-        // Phase 1: Max
+        // Calculate starting address of the row
+        int row_base_idx = blk_start * T * T + t * num_blks * T;
+
+        // Phase 1: Max reduction
         float max_val = -INFINITY;
+        // Chunk processing to handle rows with N_elem > blockDim.x
+        // Version 3: loop over row-interleaved BCSR; 5% improvement
+        for (int idx = threadIdx.x; idx < N_elem; idx += blockDim.x) {
+            float val = input.values[row_base_idx + idx];
+            max_val = fmaxf(max_val, val);
+        }
+
+        /* VERSION 2: using bitwise operations; negligible improvement
+        for (int idx = threadIdx.x; idx < N_elem; idx += blockDim.x) {
+            // bitwise operations instead of division
+            int blk_offset = idx >> LOG_T;  // idx / T
+            int c = idx & MASK_T;  // idx % T
+            
+            int blk = blk_start + blk_offset;
+            
+            // address calculation using bitshifts
+            int in_blk_base = (blk << (LOG_T * 2)) + (t << LOG_T);
+            float val = input.values[in_blk_base + c];
+            max_val = fmaxf(max_val, val);
+        }
+        */
+
+        /* VERSION 1:
         for (int idx = threadIdx.x; idx < N_elem; idx += blockDim.x) {
             int blk = blk_start + (idx / T);
             int c = idx % T;
             max_val = fmaxf(max_val, input.values[blk * T * T + t * T + c]);
-        }
+        } */
 
         for (int offset = 16; offset > 0; offset /= 2) {
             max_val = fmaxf(max_val, __shfl_down_sync(0xFFFFFFFF, max_val, offset));
@@ -286,8 +342,10 @@ __global__ void softmax_bcsr_bcsr_kernel(BCSR input, BCSR output, const int* row
         if (threadIdx.x % 32 == 0) {
             shared_mem[threadIdx.x / 32] = max_val;
         }
+
         __syncthreads();
 
+        // Warp 0 Sweep for max reduction in shared memory
         if (threadIdx.x < 32) {
             max_val = threadIdx.x < blockDim.x / 32 ? shared_mem[threadIdx.x] : -INFINITY;
             for (int offset = 16; offset > 0; offset /= 2) {
@@ -298,10 +356,39 @@ __global__ void softmax_bcsr_bcsr_kernel(BCSR input, BCSR output, const int* row
             }
         }
         __syncthreads();
+
         max_val = shared_mem[0];
 
-        // Phase 2: Sum Exp
+        // Phase 2: Exp sum reduction
+        int out_row_base_idx = output.row_ptr[bi] * T * T + t * num_blks * T;
         float sum_exp = 0.0f;
+        // Chunk processing for exponential sum
+        for (int idx = threadIdx.x; idx < N_elem; idx += blockDim.x) {
+            float val = input.values[row_base_idx + idx];
+            float e = expf(val - max_val);
+            output.values[out_row_base_idx + idx] = e;
+            sum_exp += e;
+        }
+
+        /* VERSION 2: using bitwise operations
+        for (int idx = threadIdx.x; idx < N_elem; idx += blockDim.x) {
+            // bitwise operations instead of division
+            int blk_offset = idx >> LOG_T;  // idx / T
+            int c = idx & MASK_T;  // idx % T
+            
+            int blk = blk_start + blk_offset;
+            int out_idx = output.block_idx[bi * output.num_block_cols + input.col_idx[blk]];
+            
+            // address calculation using bitshifts
+            int in_blk_base = (blk << (LOG_T * 2)) + (t << LOG_T);
+            float e = expf(input.values[in_blk_base + c] - max_val);
+            int out_blk_base = (out_idx << (LOG_T * 2)) + (t << LOG_T);
+            output.values[out_blk_base + c] = e;
+            sum_exp += e;
+        }
+        */
+        
+        /* VERSION 1:
         for (int idx = threadIdx.x; idx < N_elem; idx += blockDim.x) {
             int blk = blk_start + (idx / T);
             int c = idx % T;
@@ -310,6 +397,7 @@ __global__ void softmax_bcsr_bcsr_kernel(BCSR input, BCSR output, const int* row
             output.values[out_idx * T * T + t * T + c] = e; 
             sum_exp += e;
         }
+        */
 
         for (int offset = 16; offset > 0; offset /= 2) {
             sum_exp += __shfl_down_sync(0xFFFFFFFF, sum_exp, offset);
@@ -320,6 +408,7 @@ __global__ void softmax_bcsr_bcsr_kernel(BCSR input, BCSR output, const int* row
         }
         __syncthreads();
 
+        // Warp 0 Sweep for sum reduction in shared memory
         if (threadIdx.x < 32) {
             sum_exp = threadIdx.x < blockDim.x / 32 ? shared_mem[threadIdx.x] : 0.0f;
             for (int offset = 16; offset > 0; offset /= 2) {
@@ -330,51 +419,77 @@ __global__ void softmax_bcsr_bcsr_kernel(BCSR input, BCSR output, const int* row
             }
         }
         __syncthreads();
+
         sum_exp = shared_mem[0];
 
         // Phase 3: Normalize
+        // Chunk processing for final output normalization
+        for (int idx = threadIdx.x; idx < N_elem; idx += blockDim.x) {
+            output.values[out_row_base_idx + idx] /= sum_exp;
+        }
+
+        /* VERSION 2: using bitwise operations
+        for (int idx = threadIdx.x; idx < N_elem; idx += blockDim.x) {
+            // bitwise operations instead of division
+            int blk_offset = idx >> LOG_T;  // idx / T
+            int c = idx & MASK_T;  // idx % T
+            
+            int blk = blk_start + blk_offset;
+            int out_idx = output.block_idx[bi * output.num_block_cols + input.col_idx[blk]];
+            
+            // address calculation using bitshifts
+            int out_blk_base = (out_idx << (LOG_T * 2)) + (t << LOG_T);
+            output.values[out_blk_base + c] /= sum_exp;
+        }
+        */
+        /* VERSION 1:
         for (int idx = threadIdx.x; idx < N_elem; idx += blockDim.x) {
             int blk = blk_start + (idx / T);
             int c = idx % T;
             int out_idx = output.block_idx[bi * output.num_block_cols + input.col_idx[blk]];
             output.values[out_idx * T * T + t * T + c] /= sum_exp;
         }
+        */
+
         __syncthreads(); // before processing next row in same block
     }
 }
 
-void softmax_bcsr_bcsr(BCSR& input, BCSR& output) {
-    cudaDeviceSynchronize();
+void softmax_bcsr_bcsr(BCSRMatrix& input, BCSRMatrix& output) {
     
-    int num_blocks = 256;
+    BCSRView view_in = input.get_view();
+    BCSRView view_out = output.get_view();
+
+    int num_blocks = 1024;
     int BLOCK_WIDTH = 256;
     dim3 blockSize(BLOCK_WIDTH, 1);
     dim3 gridSize(num_blocks, 1);
     size_t smem = (BLOCK_WIDTH / 32) * sizeof(float);
 
     if (SOFTMAX_BCSR_USE_DYNAMIC) {
-        int* d_row_counter;
-        cudaMalloc(&d_row_counter, sizeof(int));
-        cudaMemset(d_row_counter, 0, sizeof(int));
-
         char label[64];
-        snprintf(label, sizeof(label), "softmax_bcsr_bcsr %dx%d (dynamic tiled)", input.M, input.N);
+        snprintf(label, sizeof(label), "softmax_bcsr_bcsr %dx%d (one row per block)", view_in.M, view_in.N);
         
+        // Launch exactly one block per row
+        dim3 rowGridSize(view_in.M, 1);
         time_and_print(label, [&]{ 
-            softmax_bcsr_bcsr_kernel_dynamic<<<gridSize, blockSize, smem>>>(input, output, d_row_counter); 
+            softmax_bcsr_bcsr_kernel_dynamic<<<rowGridSize, blockSize, smem>>>(view_in, view_out); 
         });
 
-        cudaFree(d_row_counter);
     } else {
-        int M = input.M;
-        int T = input.TILING;
+        int M = view_in.M;
+        int T = view_in.TILING;
+
+        // Copy row_ptr from device to host to determine partition boundaries
+        std::vector<int> h_row_ptr(view_in.num_block_rows + 1);
+        cudaMemcpy(h_row_ptr.data(), view_in.row_ptr, (view_in.num_block_rows + 1) * sizeof(int), cudaMemcpyDeviceToHost);
 
         // Weight metric: number of non-zero elements per row
         int total_weight = 0;
         std::vector<int> row_weights(M, 0);
         for (int row = 0; row < M; row++) {
             int bi = row / T;
-            int w = input.row_ptr[bi + 1] - input.row_ptr[bi]; // dense blocks
+            int w = h_row_ptr[bi + 1] - h_row_ptr[bi]; // dense blocks
             row_weights[row] = w;
             total_weight += w;
         }
@@ -398,10 +513,10 @@ void softmax_bcsr_bcsr(BCSR& input, BCSR& output) {
         cudaMemcpy(d_partitions, partitions.data(), (num_blocks + 1) * sizeof(int), cudaMemcpyHostToDevice);
 
         char label[64];
-        snprintf(label, sizeof(label), "softmax_bcsr_bcsr %dx%d (static tiled)", input.M, input.N);
-        
+        snprintf(label, sizeof(label), "softmax_bcsr_bcsr %dx%d (static tiled)", view_in.M, view_in.N);
+
         time_and_print(label, [&]{ 
-            softmax_bcsr_bcsr_kernel<<<gridSize, blockSize, smem>>>(input, output, d_partitions); 
+            softmax_bcsr_bcsr_kernel<<<gridSize, blockSize, smem>>>(view_in, view_out, d_partitions); 
         });
 
         cudaFree(d_partitions);
