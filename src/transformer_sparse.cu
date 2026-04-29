@@ -99,7 +99,7 @@ void TransformerSparse::forward(float* x, float* mask, float* output, int N, int
     bool* tile_dense = build_tile_mask_from_additive(mask, N, granularity);
     float* h_probs = (float*)malloc(attn_bytes);
     cudaMemcpy(h_probs, probs, attn_bytes, cudaMemcpyDeviceToHost);
-    BCSR probs_bcsr(h_probs, tile_dense, N, N, granularity);
+    BCSRMatrix probs_bcsr(h_probs, tile_dense, N, N, granularity);
     free(h_probs);
     free(tile_dense);
 

@@ -181,7 +181,7 @@ void spmm(BCSR& A, float* B, float* output, int M, int N, int K) {
 constexpr int SPMM_TK = 32;
 
 template<int T, int BN_COLS>
-__global__ void spmm_bcsr_kernel(BCSR A, const float* __restrict__ B,
+__global__ void spmm_bcsr_kernel(BCSRView A, const float* __restrict__ B,
                                  float* __restrict__ output,
                                  int M, int K) {
     const int bi       = blockIdx.x;                  // block-row of A
@@ -260,17 +260,20 @@ __global__ void spmm_bcsr_kernel(BCSR A, const float* __restrict__ B,
     if (active_out) output[(size_t)r * K + col] = acc;
 }
 
-void spmm(BCSR& A, float* B, float* output, int M, int N, int K) {
-    assert(A.M == M && A.N == N);
+void spmm(BCSRMatrix& A, float* B, float* output, int M, int N, int K) {
+    assert(A.get_M() == M && A.get_N() == N);
     cudaDeviceSynchronize();
+    
+    BCSRView viewA = A.get_view();
+    
     char label[64];
-    snprintf(label, sizeof(label), "spmm %dx%dx%d (T=%d)", M, N, K, A.TILING);
-    const int T = A.TILING;
+    snprintf(label, sizeof(label), "spmm %dx%dx%d (T=%d)", M, N, K, viewA.TILING);
+    const int T = viewA.TILING;
 
     auto launch = [&](auto kernel, int bn_cols, int T_rt) {
         dim3 grid(M / T_rt, (K + bn_cols - 1) / bn_cols);
         dim3 block(bn_cols, T_rt);
-        time_and_print(label, [&]{ kernel<<<grid, block>>>(A, B, output, M, K); });
+        time_and_print(label, [&]{ kernel<<<grid, block>>>(viewA, B, output, M, K); });
     };
 
     switch (T) {
