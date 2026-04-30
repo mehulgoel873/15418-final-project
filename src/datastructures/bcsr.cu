@@ -1,9 +1,12 @@
 #include "bcsr.cuh"
 #include <cstdlib>
 #include <cstring>
+#include <cstdio>
+#include <chrono>
 #include <vector>
 
 BCSRMatrix::BCSRMatrix(const float* host_data, const bool* tile_dense, int M, int N, int tiling) {
+    auto _bcsr_t0 = std::chrono::high_resolution_clock::now();
     view.TILING = tiling;
     view.M = M;
     view.N = N;
@@ -75,6 +78,12 @@ BCSRMatrix::BCSRMatrix(const float* host_data, const bool* tile_dense, int M, in
         view.col_idx = nullptr;
         view.values  = nullptr;
     }
+
+    auto _bcsr_t1 = std::chrono::high_resolution_clock::now();
+    double _bcsr_ms =
+        std::chrono::duration<double, std::milli>(_bcsr_t1 - _bcsr_t0).count();
+    printf("[BCSR ctor M=%d N=%d T=%d nnzb=%d              ]  %6.3f ms\n",
+           M, N, tiling, view.nnzb, _bcsr_ms);
 }
 
 BCSRMatrix::~BCSRMatrix() {
