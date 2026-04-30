@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
-"""Plot naive / sparse ms-per-iter ratio vs sparsity, one plot per N.
+"""Plot naive / sparse timing ratio vs sparsity, one plot per N.
 
 For each N in the results CSV, draw 4 lines (one per granularity) showing
-sparse_ms_per_iter / naive_ms_per_iter, averaged across seeds.
+naive_metric / sparse_metric (i.e. speedup), averaged across seeds.
+
+Use --metric to choose which timing column to compare:
+    ms_per_iter  (default) total transformer ms per iter
+    sddmm        Q @ K^T  (sparse: [sddmm], naive: 4th matmul_tiled)
+    spmm         attn @ V (sparse: [spmm],  naive: 5th matmul_tiled)
+    softmax      attention softmax
 """
 import argparse
 import csv
@@ -13,8 +19,15 @@ import matplotlib.pyplot as plt
 
 ROOT = Path(__file__).resolve().parent
 
+METRIC_COLUMNS = {
+    "ms_per_iter": "ms_per_iter",
+    "sddmm":       "sddmm_ms",
+    "spmm":        "spmm_ms",
+    "softmax":     "softmax_ms",
+}
 
-def load(path: Path):
+
+def load(path: Path, column: str):
     rows = []
     with path.open() as f:
         for r in csv.DictReader(f):
@@ -23,10 +36,11 @@ def load(path: Path):
                 r["sparsity"] = float(r["sparsity"])
                 r["granularity"] = int(r["granularity"])
                 r["seed"] = int(r["seed"])
-                r["ms_per_iter"] = float(r["ms_per_iter"]) if r["ms_per_iter"] else None
+                v = r.get(column, "")
+                r["_metric"] = float(v) if v not in ("", None) else None
             except ValueError:
                 continue
-            if r["ms_per_iter"] is None:
+            if r["_metric"] is None:
                 continue
             rows.append(r)
     return rows
@@ -39,19 +53,24 @@ def mean(xs):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--csv", default=str(ROOT / "results.csv"))
+    ap.add_argument("--csv", default=str(ROOT / "main-results.csv"))
     ap.add_argument("--impl", default="sparse",
                     help="sparse impl to compare against naive (sparse | sparse2)")
-    ap.add_argument("--out", default=str(ROOT / "speedup.png"),
-                    help="output image path; one figure with 2x2 subplots")
+    ap.add_argument("--metric", default="ms_per_iter",
+                    choices=sorted(METRIC_COLUMNS.keys()),
+                    help="which timing to compare")
+    ap.add_argument("--out", default=None,
+                    help="output image path (default: speedup_<impl>_<metric>.png)")
     args = ap.parse_args()
 
-    rows = load(Path(args.csv))
+    column = METRIC_COLUMNS[args.metric]
+    out = args.out or str(ROOT / f"speedup_{args.impl}_{args.metric}.png")
 
-    # Average ms_per_iter across seeds, keyed by (impl, N, sparsity, granularity).
+    rows = load(Path(args.csv), column)
+
     bucket = defaultdict(list)
     for r in rows:
-        bucket[(r["impl"], r["N"], r["sparsity"], r["granularity"])].append(r["ms_per_iter"])
+        bucket[(r["impl"], r["N"], r["sparsity"], r["granularity"])].append(r["_metric"])
     avg = {k: mean(v) for k, v in bucket.items()}
 
     Ns = sorted({r["N"] for r in rows})
@@ -64,12 +83,11 @@ def main():
     fig, axes = plt.subplots(2, 2, figsize=(12, 8), sharey=False)
     for ax, N in zip(axes.flat, Ns):
         for g in granularities:
-            ys = []
-            xs = []
+            xs, ys = [], []
             for s in sparsities:
                 sp = avg.get((args.impl, N, s, g))
                 nv = avg.get(("naive", N, s, g))
-                if sp is None or nv is None or nv == 0:
+                if sp is None or nv is None or sp == 0:
                     continue
                 xs.append(s)
                 ys.append(nv / sp)
@@ -78,14 +96,14 @@ def main():
         ax.axhline(1.0, color="gray", linestyle="--", linewidth=0.8)
         ax.set_title(f"N = {N}")
         ax.set_xlabel("sparsity")
-        ax.set_ylabel(f"naive / {args.impl} (ms/iter ratio)")
+        ax.set_ylabel(f"naive / {args.impl} ({args.metric} ratio)")
         ax.grid(True, alpha=0.3)
         ax.legend(fontsize=8)
 
-    fig.suptitle(f"{args.impl} vs naive — ms/iter ratio (higher = faster)")
+    fig.suptitle(f"{args.impl} vs naive — {args.metric} speedup (higher = faster)")
     fig.tight_layout()
-    fig.savefig(args.out, dpi=150)
-    print(f"wrote {args.out}")
+    fig.savefig(out, dpi=150)
+    print(f"wrote {out}")
 
 
 if __name__ == "__main__":
