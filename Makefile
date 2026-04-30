@@ -15,8 +15,8 @@ all: $(TARGET)
 $(BIN):
 	mkdir -p $(BIN)
 
-$(TARGET): $(SRC) src/transformer_naive.cu src/transformer_sparse.cu src/transformer_sparse_softmax.cu src/matmul.cu src/sddmm.cu src/softmax.cu src/datastructures/bcsr.cu | $(BIN)
-	$(NVCC) $(NVCCFLAGS) -o $@ $(SRC) src/transformer_naive.cu src/transformer_sparse.cu src/transformer_sparse_softmax.cu src/matmul.cu src/sddmm.cu src/softmax.cu src/datastructures/bcsr.cu $(LDLIBS)
+$(TARGET): $(SRC) src/transformer_naive.cu src/transformer_sparse.cu src/transformer_sparse_2.cu src/matmul.cu src/sddmm.cu src/softmax.cu src/datastructures/bcsr.cu | $(BIN)
+	$(NVCC) $(NVCCFLAGS) -o $@ $(SRC) src/transformer_naive.cu src/transformer_sparse.cu src/transformer_sparse_2.cu src/matmul.cu src/sddmm.cu src/softmax.cu src/datastructures/bcsr.cu $(LDLIBS)
 
 $(TEST_TARGET): tests/test_matmul.cu src/matmul.cu src/sddmm.cu src/datastructures/bcsr.cu | $(BIN)
 	$(NVCC) $(NVCCFLAGS) -o $@ tests/test_matmul.cu src/matmul.cu src/sddmm.cu src/datastructures/bcsr.cu $(LDLIBS)

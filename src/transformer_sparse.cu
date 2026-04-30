@@ -111,10 +111,6 @@ void TransformerSparse::forward(float* x, float* mask, float* output, int N, int
     // probs = softmax(scores) row-wise keeping the same sparsity pattern
     softmax_bcsr_bcsr(scores_bcsr, probs_bcsr);
 
-    sddmm(Q, K, scores_bcsr, d);
-    scale_bcsr_values(scores_bcsr, 1.0f / sqrtf((float)d));
-    softmax_bcsr_bcsr(scores_bcsr, probs_bcsr);
-
     // attn_out = probs_bcsr @ V : (N x N) sparse @ (N x d) dense -> (N x d) dense
     spmm(probs_bcsr, V, output, N, N, d);
 

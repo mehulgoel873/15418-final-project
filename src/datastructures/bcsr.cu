@@ -102,12 +102,6 @@ BCSRMatrix::BCSRMatrix(const float* host_data, const bool* d_tile_dense, int M, 
         cudaMemset(view.block_idx, 0xFF, total_blocks * sizeof(int));
         cudaMemset(view.rev_col_idx, 0xFF, total_blocks * sizeof(int));
     }
-
-    auto _bcsr_t1 = std::chrono::high_resolution_clock::now();
-    double _bcsr_ms =
-        std::chrono::duration<double, std::milli>(_bcsr_t1 - _bcsr_t0).count();
-    printf("[BCSR ctor M=%d N=%d T=%d nnzb=%d              ]  %6.3f ms\n",
-           M, N, tiling, view.nnzb, _bcsr_ms);
 }
 
 BCSRMatrix::~BCSRMatrix() {

@@ -1,4 +1,4 @@
-#include "transformer_sparse.cuh"
+#include "transformer_sparse_2.cuh"
 #include "transformer_naive.cuh"
 #include "matmul.cuh"
 #include "softmax.cuh"
@@ -16,7 +16,7 @@ static void rand_init_device_buf(float* d_ptr, int n) {
     free(h);
 }
 
-__global__ void build_tile_mask_kernel(const float* mask, bool* tile_dense, int N, int granularity, int Tb) {
+__global__ static void build_tile_mask_kernel_v2(const float* mask, bool* tile_dense, int N, int granularity, int Tb) {
     int bj = blockIdx.x * blockDim.x + threadIdx.x;
     int bi = blockIdx.y * blockDim.y + threadIdx.y;
 
@@ -32,29 +32,17 @@ __global__ void build_tile_mask_kernel(const float* mask, bool* tile_dense, int 
     }
 }
 
-// Build a granularity-block sparsity mask from the additive softmax mask:
-// a tile is dense iff any entry inside it is finite (i.e. not all -INF).
-static bool* build_tile_mask_from_additive(const float* d_mask, int N, int granularity) {
+static bool* build_tile_mask_from_additive_v2(const float* d_mask, int N, int granularity) {
     int Tb = N / granularity;
-    
     bool* d_tile_dense;
     cudaMalloc(&d_tile_dense, Tb * Tb * sizeof(bool));
-    
     dim3 block(16, 16);
     dim3 grid((Tb + 15) / 16, (Tb + 15) / 16);
-    build_tile_mask_kernel<<<grid, block>>>(d_mask, d_tile_dense, N, granularity, Tb);
-    
+    build_tile_mask_kernel_v2<<<grid, block>>>(d_mask, d_tile_dense, N, granularity, Tb);
     return d_tile_dense;
 }
 
-__global__ void scale_Q_kernel(float* Q, int len, float scale) {
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx < len) {
-        Q[idx] *= scale;
-    }
-}
-
-TransformerSparse::TransformerSparse(int d) : d_W_q(nullptr), d_W_k(nullptr), d_W_v(nullptr), d_dim(d) {
+TransformerSparse2::TransformerSparse2(int d) : d_W_q(nullptr), d_W_k(nullptr), d_W_v(nullptr), d_dim(d) {
     size_t bytes = (size_t)d * d * sizeof(float);
     cudaMalloc(&d_W_q, bytes);
     cudaMalloc(&d_W_k, bytes);
@@ -64,13 +52,13 @@ TransformerSparse::TransformerSparse(int d) : d_W_q(nullptr), d_W_k(nullptr), d_
     rand_init_device_buf(d_W_v, d * d);
 }
 
-TransformerSparse::~TransformerSparse() {
+TransformerSparse2::~TransformerSparse2() {
     cudaFree(d_W_q);
     cudaFree(d_W_k);
     cudaFree(d_W_v);
 }
 
-void TransformerSparse::forward(float* x, float* mask, float* output, int N, int d, int granularity) {
+void TransformerSparse2::forward(float* x, float* mask, float* output, int N, int d, int granularity) {
     float *Q, *K, *V;
     size_t tok_bytes = (size_t)N * d * sizeof(float);
     if (cudaMalloc(&Q, tok_bytes) != cudaSuccess ||
@@ -80,26 +68,22 @@ void TransformerSparse::forward(float* x, float* mask, float* output, int N, int
         return;
     }
 
-    // Project x into Q, K, V: (N x d) @ (d x d) -> (N x d).
     matmul_tiled(x, d_W_q, Q, N, d, d);
     matmul_tiled(x, d_W_k, K, N, d, d);
     matmul_tiled(x, d_W_v, V, N, d, d);
 
-    // Build the BCSR sparsity pattern from the additive mask. SDDMM will only
-    // compute the tiles marked dense — no dense Q @ K^T, no transpose, no
-    // add_mask, no dense softmax. K stays as (N x d) row-major because SDDMM
-    // treats B's rows as the columns of B^T directly.
-    bool* tile_dense = build_tile_mask_from_additive(mask, N, granularity);
-    BCSR scores_bcsr(nullptr, tile_dense, N, N, granularity);
-    BCSR probs_bcsr (nullptr, tile_dense, N, N, granularity);
-    free(tile_dense);
+    // Gather-based SDDMM (sddmm.cu): treats B's rows as B^T's columns, so K
+    // does NOT need to be transposed. Only sampled tiles are computed.
+    bool* d_tile_dense = build_tile_mask_from_additive_v2(mask, N, granularity);
+    BCSRMatrix scores_bcsr(nullptr, d_tile_dense, N, N, granularity);
+    BCSRMatrix probs_bcsr (nullptr, d_tile_dense, N, N, granularity);
 
-    sddmm(Q, K, scores_bcsr, d);
+    sddmm(Q, K, scores_bcsr, d);                                  // 4-arg form -> sddmm.cu
     scale_bcsr_values(scores_bcsr, 1.0f / sqrtf((float)d));
     softmax_bcsr_bcsr(scores_bcsr, probs_bcsr);
 
-    // attn_out = probs_bcsr @ V : (N x N) sparse @ (N x d) dense -> (N x d) dense
     spmm(probs_bcsr, V, output, N, N, d);
 
     cudaFree(Q); cudaFree(K); cudaFree(V);
+    cudaFree(d_tile_dense);
 }
