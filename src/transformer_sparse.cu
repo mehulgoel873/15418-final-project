@@ -15,29 +15,39 @@ static void rand_init_device_buf(float* d_ptr, int n) {
     free(h);
 }
 
+__global__ void build_tile_mask_kernel(const float* mask, bool* tile_dense, int N, int granularity, int Tb) {
+    int bj = blockIdx.x * blockDim.x + threadIdx.x;
+    int bi = blockIdx.y * blockDim.y + threadIdx.y;
+
+    if (bi < Tb && bj < Tb) {
+        bool any_finite = false;
+        for (int ti = 0; ti < granularity && !any_finite; ti++) {
+            for (int tj = 0; tj < granularity && !any_finite; tj++) {
+                float v = mask[(bi * granularity + ti) * N + (bj * granularity + tj)];
+                if (isfinite(v)) any_finite = true;
+            }
+        }
+        tile_dense[bi * Tb + bj] = any_finite;
+    }
+}
+
 // Build a granularity-block sparsity mask from the additive softmax mask:
 // a tile is dense iff any entry inside it is finite (i.e. not all -INF).
 static bool* build_tile_mask_from_additive(const float* d_mask, int N, int granularity) {
-    size_t bytes = (size_t)N * N * sizeof(float);
-    float* h_mask = (float*)malloc(bytes);
-    cudaMemcpy(h_mask, d_mask, bytes, cudaMemcpyDeviceToHost);
-
     int Tb = N / granularity;
-    bool* tile_dense = (bool*)calloc((size_t)Tb * Tb, sizeof(bool));
-    for (int bi = 0; bi < Tb; bi++) {
-        for (int bj = 0; bj < Tb; bj++) {
-            bool any_finite = false;
-            for (int ti = 0; ti < granularity && !any_finite; ti++) {
-                for (int tj = 0; tj < granularity && !any_finite; tj++) {
-                    float v = h_mask[(bi * granularity + ti) * N + (bj * granularity + tj)];
-                    if (isfinite(v)) any_finite = true;
-                }
-            }
-            tile_dense[bi * Tb + bj] = any_finite;
-        }
-    }
-    free(h_mask);
-    return tile_dense;
+    
+    bool* d_tile_dense;
+    cudaMalloc(&d_tile_dense, Tb * Tb * sizeof(bool));
+    
+    dim3 block(16, 16);
+    dim3 grid((Tb + 15) / 16, (Tb + 15) / 16);
+    build_tile_mask_kernel<<<grid, block>>>(d_mask, d_tile_dense, N, granularity, Tb);
+    
+    bool* h_tile_dense = (bool*)malloc(Tb * Tb * sizeof(bool));
+    cudaMemcpy(h_tile_dense, d_tile_dense, Tb * Tb * sizeof(bool), cudaMemcpyDeviceToHost);
+    cudaFree(d_tile_dense);
+
+    return h_tile_dense;
 }
 
 __global__ void scale_Q_kernel(float* Q, int len, float scale) {
