@@ -43,11 +43,7 @@ static bool* build_tile_mask_from_additive(const float* d_mask, int N, int granu
     dim3 grid((Tb + 15) / 16, (Tb + 15) / 16);
     build_tile_mask_kernel<<<grid, block>>>(d_mask, d_tile_dense, N, granularity, Tb);
     
-    bool* h_tile_dense = (bool*)malloc(Tb * Tb * sizeof(bool));
-    cudaMemcpy(h_tile_dense, d_tile_dense, Tb * Tb * sizeof(bool), cudaMemcpyDeviceToHost);
-    cudaFree(d_tile_dense);
-
-    return h_tile_dense;
+    return d_tile_dense;
 }
 
 __global__ void scale_Q_kernel(float* Q, int len, float scale) {
@@ -103,10 +99,10 @@ void TransformerSparse::forward(float* x, float* mask, float* output, int N, int
     // Pack dense probs into BCSR using a tile-mask derived from the additive
     // mask: tiles that are entirely -INF in `mask` are dropped, since their
     // softmax outputs are zero and contribute nothing to probs @ V.
-    bool* tile_dense = build_tile_mask_from_additive(mask, N, granularity);
+    bool* d_tile_dense = build_tile_mask_from_additive(mask, N, granularity);
     
-    BCSRMatrix scores_bcsr(nullptr, tile_dense, N, N, granularity);
-    BCSRMatrix probs_bcsr(nullptr, tile_dense, N, N, granularity);
+    BCSRMatrix scores_bcsr(nullptr, d_tile_dense, N, N, granularity);
+    BCSRMatrix probs_bcsr(nullptr, d_tile_dense, N, N, granularity);
 
     // scores = Q K^T : (N x d) dense @ (d x N) dense -> (N x N) sparse
     sddmm(Q, K_T, scores_bcsr, N, d, N);
@@ -118,5 +114,5 @@ void TransformerSparse::forward(float* x, float* mask, float* output, int N, int
     spmm(probs_bcsr, V, output, N, N, d);
 
     cudaFree(Q); cudaFree(K); cudaFree(V); cudaFree(K_T);
-    free(tile_dense);
+    cudaFree(d_tile_dense);
 }

@@ -3,7 +3,42 @@
 #include <cstring>
 #include <vector>
 
-BCSRMatrix::BCSRMatrix(const float* host_data, const bool* tile_dense, int M, int N, int tiling) {
+__global__ void bcsr_pass1_kernel(const bool* tile_dense, int num_block_rows, int num_block_cols, int* row_nnz) {
+    int bi = blockIdx.x * blockDim.x + threadIdx.x;
+    if (bi < num_block_rows) {
+        int count = 0;
+        for (int bj = 0; bj < num_block_cols; bj++) {
+            if (tile_dense[bi * num_block_cols + bj]) {
+                count++;
+            }
+        }
+        row_nnz[bi] = count;
+    }
+}
+
+__global__ void bcsr_pass2_kernel(const bool* tile_dense, int num_block_rows, int num_block_cols, 
+                                  const int* row_ptr, int* block_idx, int* rev_col_idx, int* col_idx) {
+    int bi = blockIdx.x * blockDim.x + threadIdx.x;
+    if (bi < num_block_rows) {
+        int start_idx = row_ptr[bi];
+        int local_j = 0;
+        for (int bj = 0; bj < num_block_cols; bj++) {
+            int flat_idx = bi * num_block_cols + bj;
+            if (tile_dense[flat_idx]) {
+                int blk = start_idx + local_j;
+                block_idx[flat_idx] = blk;
+                rev_col_idx[flat_idx] = local_j;
+                col_idx[blk] = bj;
+                local_j++;
+            } else {
+                block_idx[flat_idx] = -1;
+                rev_col_idx[flat_idx] = -1;
+            }
+        }
+    }
+}
+
+BCSRMatrix::BCSRMatrix(const float* host_data, const bool* d_tile_dense, int M, int N, int tiling) {
     view.TILING = tiling;
     view.M = M;
     view.N = N;
@@ -13,65 +48,50 @@ BCSRMatrix::BCSRMatrix(const float* host_data, const bool* tile_dense, int M, in
     int T = view.TILING;
     int total_blocks = view.num_block_rows * view.num_block_cols;
 
-    std::vector<int> h_block_idx(total_blocks, -1);
-    std::vector<int> h_rev_col_idx(total_blocks, -1);
-    std::vector<int> h_row_ptr(view.num_block_rows + 1, 0);
-    std::vector<int> h_col_idx;
-    std::vector<float> h_values;
-
-    for (int bi = 0; bi < view.num_block_rows; bi++) {
-        int row_start = (int)h_col_idx.size();
-        h_row_ptr[bi] = row_start;
-
-        // Pass 1: assign block indices + column-block indices for this row.
-        for (int bj = 0; bj < view.num_block_cols; bj++) {
-            if (tile_dense[bi * view.num_block_cols + bj]) {
-                int blk = (int)h_col_idx.size();
-                int local_j = blk - row_start;
-                h_block_idx[bi * view.num_block_cols + bj] = blk;
-                h_rev_col_idx[bi * view.num_block_cols + bj] = local_j;
-                h_col_idx.push_back(bj);
-            }
-        }
-        int K = (int)h_col_idx.size() - row_start;
-        if (K == 0) continue;
-
-        // Reserve K*T*T floats for this block-row's strip (zero-init by default).
-        size_t base = (size_t)row_start * T * T;
-        h_values.resize(base + (size_t)K * T * T);
-
-        // Pass 2: copy host data into the row-interleaved strip — row ti of
-        // local tile j sits at base + ti*(K*T) + j*T.
-        if (host_data) {
-            for (int j = 0; j < K; j++) {
-                int bj = h_col_idx[row_start + j];
-                for (int ti = 0; ti < T; ti++) {
-                    memcpy(&h_values[base + (size_t)ti * K * T + (size_t)j * T],
-                           &host_data[(bi * T + ti) * N + bj * T],
-                           T * sizeof(float));
-                }
-            }
-        }
-    }
-    h_row_ptr[view.num_block_rows] = (int)h_col_idx.size();
-    view.nnzb = (int)h_col_idx.size();
-
+    // Allocate device memory for structure
     // cudaMalloc instead of cudaMallocManaged to prevent page-faulting
     cudaMalloc(&view.block_idx, total_blocks * sizeof(int));
     cudaMalloc(&view.rev_col_idx, total_blocks * sizeof(int));
-    cudaMalloc(&view.row_ptr,   (view.num_block_rows + 1) * sizeof(int));
-    cudaMemcpy(view.block_idx, h_block_idx.data(), total_blocks * sizeof(int), cudaMemcpyHostToDevice);
-    cudaMemcpy(view.rev_col_idx, h_rev_col_idx.data(), total_blocks * sizeof(int), cudaMemcpyHostToDevice);
-    cudaMemcpy(view.row_ptr,   h_row_ptr.data(),   (view.num_block_rows + 1) * sizeof(int), cudaMemcpyHostToDevice);
+    cudaMalloc(&view.row_ptr, (view.num_block_rows + 1) * sizeof(int));
+
+    // Pass 1: count nnz per row on device
+    int* d_row_nnz;
+    cudaMalloc(&d_row_nnz, view.num_block_rows * sizeof(int));
+    
+    int block_size = 256;
+    int grid_size = (view.num_block_rows + block_size - 1) / block_size;
+    bcsr_pass1_kernel<<<grid_size, block_size>>>(d_tile_dense, view.num_block_rows, view.num_block_cols, d_row_nnz);
+    
+    // Prefix sum on host
+    std::vector<int> h_row_nnz(view.num_block_rows);
+    cudaMemcpy(h_row_nnz.data(), d_row_nnz, view.num_block_rows * sizeof(int), cudaMemcpyDeviceToHost);
+    cudaFree(d_row_nnz);
+
+    std::vector<int> h_row_ptr(view.num_block_rows + 1, 0);
+    for(int bi = 0; bi < view.num_block_rows; bi++) {
+        h_row_ptr[bi + 1] = h_row_ptr[bi] + h_row_nnz[bi];
+    }
+    view.nnzb = h_row_ptr[view.num_block_rows];
+
+    cudaMemcpy(view.row_ptr, h_row_ptr.data(), (view.num_block_rows + 1) * sizeof(int), cudaMemcpyHostToDevice);
 
     if (view.nnzb > 0) {
-        cudaMalloc(&view.col_idx,   view.nnzb * sizeof(int));
-        cudaMalloc(&view.values,    (size_t)view.nnzb * T * T * sizeof(float));
-        cudaMemcpy(view.col_idx,   h_col_idx.data(),   view.nnzb * sizeof(int), cudaMemcpyHostToDevice);
-        cudaMemcpy(view.values,    h_values.data(),    (size_t)view.nnzb * T * T * sizeof(float), cudaMemcpyHostToDevice);
+        cudaMalloc(&view.col_idx, view.nnzb * sizeof(int));
+        
+        // Reserve K*T*T floats for this block-row's strip (zero-init by default).
+        cudaMalloc(&view.values, (size_t)view.nnzb * T * T * sizeof(float));
+        cudaMemset(view.values, 0, (size_t)view.nnzb * T * T * sizeof(float)); // zero init values
+
+        // Pass 2: populate sparse indices on device
+        // assign block indices + column-block indices
+        bcsr_pass2_kernel<<<grid_size, block_size>>>(d_tile_dense, view.num_block_rows, view.num_block_cols,
+                                                     view.row_ptr, view.block_idx, view.rev_col_idx, view.col_idx);
     } else {
         view.col_idx = nullptr;
         view.values  = nullptr;
+        // Fill -1 for empty matrices
+        cudaMemset(view.block_idx, 0xFF, total_blocks * sizeof(int));
+        cudaMemset(view.rev_col_idx, 0xFF, total_blocks * sizeof(int));
     }
 }
 

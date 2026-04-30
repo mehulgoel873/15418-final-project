@@ -69,7 +69,7 @@ private:
     BCSRView view;
 
 public:
-    BCSRMatrix(const float* host_data, const bool* tile_dense, int M, int N, int tiling);
+    BCSRMatrix(const float* host_data, const bool* d_tile_dense, int M, int N, int tiling);
     ~BCSRMatrix();
 
     // Prevent accidental copying to avoid double-frees
