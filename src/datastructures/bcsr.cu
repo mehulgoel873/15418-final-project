@@ -14,6 +14,7 @@ BCSRMatrix::BCSRMatrix(const float* host_data, const bool* tile_dense, int M, in
     int total_blocks = view.num_block_rows * view.num_block_cols;
 
     std::vector<int> h_block_idx(total_blocks, -1);
+    std::vector<int> h_rev_col_idx(total_blocks, -1);
     std::vector<int> h_row_ptr(view.num_block_rows + 1, 0);
     std::vector<int> h_col_idx;
     std::vector<float> h_values;
@@ -26,7 +27,9 @@ BCSRMatrix::BCSRMatrix(const float* host_data, const bool* tile_dense, int M, in
         for (int bj = 0; bj < view.num_block_cols; bj++) {
             if (tile_dense[bi * view.num_block_cols + bj]) {
                 int blk = (int)h_col_idx.size();
+                int local_j = blk - row_start;
                 h_block_idx[bi * view.num_block_cols + bj] = blk;
+                h_rev_col_idx[bi * view.num_block_cols + bj] = local_j;
                 h_col_idx.push_back(bj);
             }
         }
@@ -55,8 +58,10 @@ BCSRMatrix::BCSRMatrix(const float* host_data, const bool* tile_dense, int M, in
 
     // cudaMalloc instead of cudaMallocManaged to prevent page-faulting
     cudaMalloc(&view.block_idx, total_blocks * sizeof(int));
+    cudaMalloc(&view.rev_col_idx, total_blocks * sizeof(int));
     cudaMalloc(&view.row_ptr,   (view.num_block_rows + 1) * sizeof(int));
     cudaMemcpy(view.block_idx, h_block_idx.data(), total_blocks * sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(view.rev_col_idx, h_rev_col_idx.data(), total_blocks * sizeof(int), cudaMemcpyHostToDevice);
     cudaMemcpy(view.row_ptr,   h_row_ptr.data(),   (view.num_block_rows + 1) * sizeof(int), cudaMemcpyHostToDevice);
 
     if (view.nnzb > 0) {
@@ -72,6 +77,7 @@ BCSRMatrix::BCSRMatrix(const float* host_data, const bool* tile_dense, int M, in
 
 BCSRMatrix::~BCSRMatrix() {
     cudaFree(view.block_idx);
+    cudaFree(view.rev_col_idx);
     cudaFree(view.row_ptr);
     if (view.col_idx) cudaFree(view.col_idx);
     if (view.values)  cudaFree(view.values);

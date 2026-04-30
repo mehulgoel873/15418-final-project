@@ -40,6 +40,13 @@ static bool* build_tile_mask_from_additive(const float* d_mask, int N, int granu
     return tile_dense;
 }
 
+__global__ void scale_Q_kernel(float* Q, int len, float scale) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < len) {
+        Q[idx] *= scale;
+    }
+}
+
 TransformerSparse::TransformerSparse(int d) : d_W_q(nullptr), d_W_k(nullptr), d_W_v(nullptr), d_dim(d) {
     size_t bytes = (size_t)d * d * sizeof(float);
     cudaMalloc(&d_W_q, bytes);
@@ -57,15 +64,12 @@ TransformerSparse::~TransformerSparse() {
 }
 
 void TransformerSparse::forward(float* x, float* mask, float* output, int N, int d, int granularity) {
-    float *Q, *K, *V, *K_T, *scores, *probs;
+    float *Q, *K, *V, *K_T;
     size_t tok_bytes  = (size_t)N * d * sizeof(float);
-    size_t attn_bytes = (size_t)N * N * sizeof(float);
     if (cudaMalloc(&Q,      tok_bytes)  != cudaSuccess ||
         cudaMalloc(&K,      tok_bytes)  != cudaSuccess ||
         cudaMalloc(&V,      tok_bytes)  != cudaSuccess ||
-        cudaMalloc(&K_T,    tok_bytes)  != cudaSuccess ||
-        cudaMalloc(&scores, attn_bytes) != cudaSuccess ||
-        cudaMalloc(&probs,  attn_bytes) != cudaSuccess) {
+        cudaMalloc(&K_T,    tok_bytes)  != cudaSuccess) {
         fprintf(stderr, "cudaMalloc failed: N=%d d=%d\n", N, d);
         return;
     }
@@ -80,32 +84,29 @@ void TransformerSparse::forward(float* x, float* mask, float* output, int N, int
     dim3 grid_KT((d + 15) / 16, (N + 15) / 16);
     transpose_kernel<<<grid_KT, block16>>>(K, K_T, N, d);
 
-    // scores = Q K^T : (N x d) @ (d x N) -> (N x N)
-    matmul_tiled(Q, K_T, scores, N, d, N);
-
-    // scale by 1/sqrt(d)
-    dim3 grid_NN((N + 15) / 16, (N + 15) / 16);
-    scale_kernel<<<grid_NN, block16>>>(scores, N, d);
-
-    // additive mask (mask in {0, -inf})
-    add_mask_kernel<<<grid_NN, block16>>>(scores, mask, N);
-
-    // probs = softmax(scores) row-wise
-    softmax_tiled(scores, probs, N, N);
+    // Scale Q by 1/sqrt(d) instead of scaling the full NxN attention matrix later
+    // TODO: fuse this operation into the softmax
+    int num_elements = N * d;
+    scale_Q_kernel<<<(num_elements + 255) / 256, 256>>>(Q, num_elements, 1.0f / sqrtf((float)d));
+    cudaDeviceSynchronize();
 
     // Pack dense probs into BCSR using a tile-mask derived from the additive
     // mask: tiles that are entirely -INF in `mask` are dropped, since their
     // softmax outputs are zero and contribute nothing to probs @ V.
     bool* tile_dense = build_tile_mask_from_additive(mask, N, granularity);
-    float* h_probs = (float*)malloc(attn_bytes);
-    cudaMemcpy(h_probs, probs, attn_bytes, cudaMemcpyDeviceToHost);
-    BCSRMatrix probs_bcsr(h_probs, tile_dense, N, N, granularity);
-    free(h_probs);
-    free(tile_dense);
+    
+    BCSRMatrix scores_bcsr(nullptr, tile_dense, N, N, granularity);
+    BCSRMatrix probs_bcsr(nullptr, tile_dense, N, N, granularity);
+
+    // scores = Q K^T : (N x d) dense @ (d x N) dense -> (N x N) sparse
+    sddmm(Q, K_T, scores_bcsr, N, d, N);
+
+    // probs = softmax(scores) row-wise keeping the same sparsity pattern
+    softmax_bcsr_bcsr(scores_bcsr, probs_bcsr);
 
     // attn_out = probs_bcsr @ V : (N x N) sparse @ (N x d) dense -> (N x d) dense
     spmm(probs_bcsr, V, output, N, N, d);
 
     cudaFree(Q); cudaFree(K); cudaFree(V); cudaFree(K_T);
-    cudaFree(scores); cudaFree(probs);
+    free(tile_dense);
 }

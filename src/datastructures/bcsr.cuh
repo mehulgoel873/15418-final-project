@@ -11,6 +11,7 @@ struct BCSRView {
     int nnzb;
 
     int*   block_idx;  // [num_block_rows * num_block_cols]: maps (bi,bj) -> block index in values, -1 if sparse
+    int*   rev_col_idx;// [num_block_rows * num_block_cols]: maps (bi,bj) -> local column block index j within the row, -1 if sparse
     int*   row_ptr;    // [num_block_rows + 1]: row_ptr[bi]..row_ptr[bi+1] indexes into col_idx for row bi
     int*   col_idx;    // [nnzb]: column block index of each dense block, in row-major order
     float* values;     // [nnzb * TILING * TILING]: row-interleaved per block-row.

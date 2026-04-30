@@ -59,7 +59,9 @@ static void get_rand_mask(float* mask, float p, int granularity, int n) {
     cudaFree(d_blocks);
 }
 
-
+// Outputs max_abs_error and max_rel_error, and PASS if either is < 1e-2. 
+// max_abs_error is the maximum absolute error across all output elements
+// max_rel_error is the maximum relative error, calculated as err / (max(|naive|, |test|) + 1e-5)
 static void check_correctness(ForwardFn naive_fn, ForwardFn test_fn, int N, int d, float p, int sparse_granularity)
 {
     float *d_x_naive, *d_x_test, *d_out_naive, *d_out_test, *d_mask_naive, *d_mask_test;

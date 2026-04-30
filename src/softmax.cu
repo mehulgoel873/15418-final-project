@@ -5,7 +5,7 @@
 #include <cstring>
 #include <vector>
 
-/// Naive softmax kernel: output = row-wise softmax(input)
+/* /// Naive softmax kernel: output = row-wise softmax(input)
 /// input: row_len x num_rows, output: row_len x num_rows
 __global__ void softmax_kernel(float* input, float* output, int row_len, int num_rows) {
     int row_idx = blockIdx.y * blockDim.y + threadIdx.y;
@@ -35,7 +35,8 @@ void softmax_naive(float* input, float* output, int row_len, int num_rows) {
     dim3 blockSize(16, 16);
     dim3 gridSize((row_len + blockSize.x - 1) / blockSize.x, (num_rows + blockSize.y - 1) / blockSize.y);
     time_and_print(label, [&]{ softmax_kernel<<<gridSize, blockSize>>>(input, output, row_len, num_rows); });
-}
+} 
+*/
 
 
 // ---------------------------------------------------------------------------
