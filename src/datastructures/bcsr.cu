@@ -1,6 +1,8 @@
 #include "bcsr.cuh"
 #include <cstdlib>
 #include <cstring>
+#include <cstdio>
+#include <chrono>
 #include <vector>
 
 __global__ void bcsr_pass1_kernel(const bool* tile_dense, int num_block_rows, int num_block_cols, int* row_nnz) {
@@ -73,6 +75,13 @@ BCSRMatrix::BCSRMatrix(const float* host_data, const bool* d_tile_dense, int M, 
     }
     view.nnzb = h_row_ptr[view.num_block_rows];
 
+    int max_K = 0;
+    for (int bi = 0; bi < view.num_block_rows; bi++) {
+        int k = h_row_ptr[bi + 1] - h_row_ptr[bi];
+        if (k > max_K) max_K = k;
+    }
+    view.max_block_row_K = max_K;
+
     cudaMemcpy(view.row_ptr, h_row_ptr.data(), (view.num_block_rows + 1) * sizeof(int), cudaMemcpyHostToDevice);
 
     if (view.nnzb > 0) {
@@ -93,6 +102,12 @@ BCSRMatrix::BCSRMatrix(const float* host_data, const bool* d_tile_dense, int M, 
         cudaMemset(view.block_idx, 0xFF, total_blocks * sizeof(int));
         cudaMemset(view.rev_col_idx, 0xFF, total_blocks * sizeof(int));
     }
+
+    auto _bcsr_t1 = std::chrono::high_resolution_clock::now();
+    double _bcsr_ms =
+        std::chrono::duration<double, std::milli>(_bcsr_t1 - _bcsr_t0).count();
+    printf("[BCSR ctor M=%d N=%d T=%d nnzb=%d              ]  %6.3f ms\n",
+           M, N, tiling, view.nnzb, _bcsr_ms);
 }
 
 BCSRMatrix::~BCSRMatrix() {

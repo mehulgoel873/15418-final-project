@@ -71,12 +71,11 @@ TransformerSparse::~TransformerSparse() {
 }
 
 void TransformerSparse::forward(float* x, float* mask, float* output, int N, int d, int granularity) {
-    float *Q, *K, *V, *K_T;
-    size_t tok_bytes  = (size_t)N * d * sizeof(float);
-    if (cudaMalloc(&Q,      tok_bytes)  != cudaSuccess ||
-        cudaMalloc(&K,      tok_bytes)  != cudaSuccess ||
-        cudaMalloc(&V,      tok_bytes)  != cudaSuccess ||
-        cudaMalloc(&K_T,    tok_bytes)  != cudaSuccess) {
+    float *Q, *K, *V;
+    size_t tok_bytes = (size_t)N * d * sizeof(float);
+    if (cudaMalloc(&Q, tok_bytes) != cudaSuccess ||
+        cudaMalloc(&K, tok_bytes) != cudaSuccess ||
+        cudaMalloc(&V, tok_bytes) != cudaSuccess) {
         fprintf(stderr, "cudaMalloc failed: N=%d d=%d\n", N, d);
         return;
     }
@@ -86,30 +85,14 @@ void TransformerSparse::forward(float* x, float* mask, float* output, int N, int
     matmul_tiled(x, d_W_k, K, N, d, d);
     matmul_tiled(x, d_W_v, V, N, d, d);
 
-    // K^T: (N x d) -> (d x N)
-    dim3 block16(16, 16);
-    dim3 grid_KT((d + 15) / 16, (N + 15) / 16);
-    transpose_kernel<<<grid_KT, block16>>>(K, K_T, N, d);
-
-    // Scale Q by 1/sqrt(d) instead of scaling the full NxN attention matrix later
-    // TODO: fuse this operation into the softmax
-    int num_elements = N * d;
-    scale_Q_kernel<<<(num_elements + 255) / 256, 256>>>(Q, num_elements, 1.0f / sqrtf((float)d));
-    cudaDeviceSynchronize();
-
-    // Pack dense probs into BCSR using a tile-mask derived from the additive
-    // mask: tiles that are entirely -INF in `mask` are dropped, since their
-    // softmax outputs are zero and contribute nothing to probs @ V.
-    bool* d_tile_dense = build_tile_mask_from_additive(mask, N, granularity);
-    
-    BCSRMatrix scores_bcsr(nullptr, d_tile_dense, N, N, granularity);
-    BCSRMatrix probs_bcsr(nullptr, d_tile_dense, N, N, granularity);
-
-    // scores = Q K^T : (N x d) dense @ (d x N) dense -> (N x N) sparse
-    sddmm(Q, K_T, scores_bcsr, N, d, N);
-
-    // probs = softmax(scores) row-wise keeping the same sparsity pattern
-    softmax_bcsr_bcsr(scores_bcsr, probs_bcsr);
+    // Build the BCSR sparsity pattern from the additive mask. SDDMM will only
+    // compute the tiles marked dense — no dense Q @ K^T, no transpose, no
+    // add_mask, no dense softmax. K stays as (N x d) row-major because SDDMM
+    // treats B's rows as the columns of B^T directly.
+    bool* tile_dense = build_tile_mask_from_additive(mask, N, granularity);
+    BCSR scores_bcsr(nullptr, tile_dense, N, N, granularity);
+    BCSR probs_bcsr (nullptr, tile_dense, N, N, granularity);
+    free(tile_dense);
 
     sddmm(Q, K, scores_bcsr, d);
     scale_bcsr_values(scores_bcsr, 1.0f / sqrtf((float)d));
@@ -118,6 +101,5 @@ void TransformerSparse::forward(float* x, float* mask, float* output, int N, int
     // attn_out = probs_bcsr @ V : (N x N) sparse @ (N x d) dense -> (N x d) dense
     spmm(probs_bcsr, V, output, N, N, d);
 
-    cudaFree(Q); cudaFree(K); cudaFree(V); cudaFree(K_T);
-    cudaFree(d_tile_dense);
+    cudaFree(Q); cudaFree(K); cudaFree(V);
 }
