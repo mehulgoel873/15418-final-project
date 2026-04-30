@@ -1,6 +1,6 @@
 .PHONY: all run test clean
 
-CCBIN := $(or $(wildcard /usr/bin/gcc-11),$(wildcard /usr/bin/gcc-12),$(shell which gcc))
+CCBIN     := gcc
 NVCC      := nvcc
 NVCCFLAGS := -lineinfo -O3 -std=c++14 -I src/ -ccbin $(CCBIN)
 LDLIBS = -lstdc++ -lm
