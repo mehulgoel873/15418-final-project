@@ -1,0 +1,577 @@
+impl,N,d,iters,sparsity,granularity,seed,label,ms_per_iter,sddmm_ms,softmax_ms,spmm_ms,returncode
+sparse,1024,768,10,0.5,1,0,Transformer Sparse (matmul.cu SDDMM),3.638,0.262,0.136,0.683,0
+sparse,1024,768,10,0.5,1,1,Transformer Sparse (matmul.cu SDDMM),3.645,0.262,0.133,0.681,0
+sparse,1024,768,10,0.5,1,2,Transformer Sparse (matmul.cu SDDMM),3.647,0.26,0.141,0.673,0
+sparse,1024,768,10,0.5,2,0,Transformer Sparse (matmul.cu SDDMM),2.255,0.195,0.13,0.349,0
+sparse,1024,768,10,0.5,2,1,Transformer Sparse (matmul.cu SDDMM),2.259,0.195,0.13,0.348,0
+sparse,1024,768,10,0.5,2,2,Transformer Sparse (matmul.cu SDDMM),2.26,0.195,0.137,0.348,0
+sparse,1024,768,10,0.5,8,0,Transformer Sparse (matmul.cu SDDMM),1.433,0.19,0.13,0.215,0
+sparse,1024,768,10,0.5,8,1,Transformer Sparse (matmul.cu SDDMM),1.44,0.188,0.131,0.217,0
+sparse,1024,768,10,0.5,8,2,Transformer Sparse (matmul.cu SDDMM),1.452,0.193,0.142,0.213,0
+sparse,1024,768,10,0.5,32,0,Transformer Sparse (matmul.cu SDDMM),1.36,0.183,0.128,0.161,0
+sparse,1024,768,10,0.5,32,1,Transformer Sparse (matmul.cu SDDMM),1.355,0.18,0.129,0.163,0
+sparse,1024,768,10,0.5,32,2,Transformer Sparse (matmul.cu SDDMM),1.357,0.182,0.132,0.161,0
+sparse,1024,768,10,0.9,1,0,Transformer Sparse (matmul.cu SDDMM),2.616,0.152,0.129,0.163,0
+sparse,1024,768,10,0.9,1,1,Transformer Sparse (matmul.cu SDDMM),2.634,0.154,0.134,0.164,0
+sparse,1024,768,10,0.9,1,2,Transformer Sparse (matmul.cu SDDMM),2.61,0.15,0.132,0.161,0
+sparse,1024,768,10,0.9,2,0,Transformer Sparse (matmul.cu SDDMM),1.753,0.111,0.138,0.086,0
+sparse,1024,768,10,0.9,2,1,Transformer Sparse (matmul.cu SDDMM),1.753,0.111,0.132,0.088,0
+sparse,1024,768,10,0.9,2,2,Transformer Sparse (matmul.cu SDDMM),1.75,0.113,0.129,0.087,0
+sparse,1024,768,10,0.9,8,0,Transformer Sparse (matmul.cu SDDMM),1.085,0.082,0.124,0.058,0
+sparse,1024,768,10,0.9,8,1,Transformer Sparse (matmul.cu SDDMM),1.083,0.088,0.133,0.059,0
+sparse,1024,768,10,0.9,8,2,Transformer Sparse (matmul.cu SDDMM),1.076,0.084,0.125,0.055,0
+sparse,1024,768,10,0.9,32,0,Transformer Sparse (matmul.cu SDDMM),1.175,0.162,0.126,0.044,0
+sparse,1024,768,10,0.9,32,1,Transformer Sparse (matmul.cu SDDMM),1.172,0.164,0.13,0.044,0
+sparse,1024,768,10,0.9,32,2,Transformer Sparse (matmul.cu SDDMM),1.175,0.166,0.129,0.042,0
+sparse,1024,768,10,0.95,1,0,Transformer Sparse (matmul.cu SDDMM),2.465,0.135,0.131,0.092,0
+sparse,1024,768,10,0.95,1,1,Transformer Sparse (matmul.cu SDDMM),2.463,0.135,0.13,0.094,0
+sparse,1024,768,10,0.95,1,2,Transformer Sparse (matmul.cu SDDMM),2.455,0.135,0.13,0.096,0
+sparse,1024,768,10,0.95,2,0,Transformer Sparse (matmul.cu SDDMM),1.701,0.096,0.13,0.052,0
+sparse,1024,768,10,0.95,2,1,Transformer Sparse (matmul.cu SDDMM),1.685,0.098,0.129,0.052,0
+sparse,1024,768,10,0.95,2,2,Transformer Sparse (matmul.cu SDDMM),1.69,0.1,0.127,0.054,0
+sparse,1024,768,10,0.95,8,0,Transformer Sparse (matmul.cu SDDMM),1.035,0.059,0.127,0.038,0
+sparse,1024,768,10,0.95,8,1,Transformer Sparse (matmul.cu SDDMM),1.041,0.061,0.13,0.038,0
+sparse,1024,768,10,0.95,8,2,Transformer Sparse (matmul.cu SDDMM),1.038,0.07,0.138,0.037,0
+sparse,1024,768,10,0.95,32,0,Transformer Sparse (matmul.cu SDDMM),1.163,0.164,0.129,0.03,0
+sparse,1024,768,10,0.95,32,1,Transformer Sparse (matmul.cu SDDMM),1.162,0.16,0.132,0.03,0
+sparse,1024,768,10,0.95,32,2,Transformer Sparse (matmul.cu SDDMM),1.173,0.158,0.133,0.03,0
+sparse,1024,768,10,0.99,1,0,Transformer Sparse (matmul.cu SDDMM),2.389,0.123,0.131,0.043,0
+sparse,1024,768,10,0.99,1,1,Transformer Sparse (matmul.cu SDDMM),2.376,0.123,0.139,0.039,0
+sparse,1024,768,10,0.99,1,2,Transformer Sparse (matmul.cu SDDMM),2.373,0.121,0.131,0.041,0
+sparse,1024,768,10,0.99,2,0,Transformer Sparse (matmul.cu SDDMM),1.636,0.072,0.132,0.028,0
+sparse,1024,768,10,0.99,2,1,Transformer Sparse (matmul.cu SDDMM),1.646,0.072,0.133,0.027,0
+sparse,1024,768,10,0.99,2,2,Transformer Sparse (matmul.cu SDDMM),1.649,0.074,0.134,0.028,0
+sparse,1024,768,10,0.99,8,0,Transformer Sparse (matmul.cu SDDMM),1.014,0.055,0.127,0.021,0
+sparse,1024,768,10,0.99,8,1,Transformer Sparse (matmul.cu SDDMM),1.009,0.055,0.128,0.022,0
+sparse,1024,768,10,0.99,8,2,Transformer Sparse (matmul.cu SDDMM),1.004,0.053,0.127,0.021,0
+sparse,1024,768,10,0.99,32,0,Transformer Sparse (matmul.cu SDDMM),1.199,0.156,0.181,0.016,0
+sparse,1024,768,10,0.99,32,1,Transformer Sparse (matmul.cu SDDMM),1.195,0.156,0.178,0.018,0
+sparse,1024,768,10,0.99,32,2,Transformer Sparse (matmul.cu SDDMM),1.19,0.156,0.168,0.016,0
+sparse,4096,768,10,0.5,1,0,Transformer Sparse (matmul.cu SDDMM),22.963,3.317,0.174,10.189,0
+sparse,4096,768,10,0.5,1,1,Transformer Sparse (matmul.cu SDDMM),22.942,3.321,0.174,10.207,0
+sparse,4096,768,10,0.5,1,2,Transformer Sparse (matmul.cu SDDMM),22.994,3.329,0.18,10.211,0
+sparse,4096,768,10,0.5,2,0,Transformer Sparse (matmul.cu SDDMM),13.118,2.502,0.18,4.778,0
+sparse,4096,768,10,0.5,2,1,Transformer Sparse (matmul.cu SDDMM),13.112,2.5,0.182,4.789,0
+sparse,4096,768,10,0.5,2,2,Transformer Sparse (matmul.cu SDDMM),13.125,2.498,0.173,4.787,0
+sparse,4096,768,10,0.5,8,0,Transformer Sparse (matmul.cu SDDMM),8.103,2.129,0.163,2.779,0
+sparse,4096,768,10,0.5,8,1,Transformer Sparse (matmul.cu SDDMM),8.112,2.126,0.161,2.773,0
+sparse,4096,768,10,0.5,8,2,Transformer Sparse (matmul.cu SDDMM),8.073,2.121,0.166,2.784,0
+sparse,4096,768,10,0.5,32,0,Transformer Sparse (matmul.cu SDDMM),6.62,2.017,0.171,2.066,0
+sparse,4096,768,10,0.5,32,1,Transformer Sparse (matmul.cu SDDMM),6.643,2.019,0.169,2.064,0
+sparse,4096,768,10,0.5,32,2,Transformer Sparse (matmul.cu SDDMM),6.523,1.956,0.17,2.023,0
+sparse,4096,768,10,0.9,1,0,Transformer Sparse (matmul.cu SDDMM),12.419,2.067,0.146,2.117,0
+sparse,4096,768,10,0.9,1,1,Transformer Sparse (matmul.cu SDDMM),12.399,2.063,0.146,2.117,0
+sparse,4096,768,10,0.9,1,2,Transformer Sparse (matmul.cu SDDMM),12.442,2.061,0.151,2.112,0
+sparse,4096,768,10,0.9,2,0,Transformer Sparse (matmul.cu SDDMM),7.557,1.466,0.146,0.994,0
+sparse,4096,768,10,0.9,2,1,Transformer Sparse (matmul.cu SDDMM),7.565,1.464,0.147,0.995,0
+sparse,4096,768,10,0.9,2,2,Transformer Sparse (matmul.cu SDDMM),7.581,1.469,0.136,0.997,0
+sparse,4096,768,10,0.9,8,0,Transformer Sparse (matmul.cu SDDMM),4.107,0.563,0.14,0.589,0
+sparse,4096,768,10,0.9,8,1,Transformer Sparse (matmul.cu SDDMM),4.114,0.561,0.139,0.593,0
+sparse,4096,768,10,0.9,8,2,Transformer Sparse (matmul.cu SDDMM),4.121,0.561,0.14,0.597,0
+sparse,4096,768,10,0.9,32,0,Transformer Sparse (matmul.cu SDDMM),3.347,0.506,0.149,0.43,0
+sparse,4096,768,10,0.9,32,1,Transformer Sparse (matmul.cu SDDMM),3.349,0.51,0.167,0.434,0
+sparse,4096,768,10,0.9,32,2,Transformer Sparse (matmul.cu SDDMM),3.347,0.496,0.156,0.428,0
+sparse,4096,768,10,0.95,1,0,Transformer Sparse (matmul.cu SDDMM),11.129,1.942,0.142,1.088,0
+sparse,4096,768,10,0.95,1,1,Transformer Sparse (matmul.cu SDDMM),11.122,1.932,0.141,1.098,0
+sparse,4096,768,10,0.95,1,2,Transformer Sparse (matmul.cu SDDMM),11.141,1.935,0.139,1.089,0
+sparse,4096,768,10,0.95,2,0,Transformer Sparse (matmul.cu SDDMM),6.868,1.343,0.143,0.526,0
+sparse,4096,768,10,0.95,2,1,Transformer Sparse (matmul.cu SDDMM),6.913,1.348,0.146,0.522,0
+sparse,4096,768,10,0.95,2,2,Transformer Sparse (matmul.cu SDDMM),6.871,1.35,0.145,0.522,0
+sparse,4096,768,10,0.95,8,0,Transformer Sparse (matmul.cu SDDMM),3.558,0.315,0.135,0.315,0
+sparse,4096,768,10,0.95,8,1,Transformer Sparse (matmul.cu SDDMM),3.573,0.309,0.138,0.316,0
+sparse,4096,768,10,0.95,8,2,Transformer Sparse (matmul.cu SDDMM),3.598,0.315,0.14,0.321,0
+sparse,4096,768,10,0.95,32,0,Transformer Sparse (matmul.cu SDDMM),2.97,0.33,0.166,0.235,0
+sparse,4096,768,10,0.95,32,1,Transformer Sparse (matmul.cu SDDMM),2.968,0.33,0.153,0.233,0
+sparse,4096,768,10,0.95,32,2,Transformer Sparse (matmul.cu SDDMM),2.98,0.33,0.16,0.238,0
+sparse,4096,768,10,0.99,1,0,Transformer Sparse (matmul.cu SDDMM),9.877,1.759,0.143,0.283,0
+sparse,4096,768,10,0.99,1,1,Transformer Sparse (matmul.cu SDDMM),9.867,1.761,0.145,0.28,0
+sparse,4096,768,10,0.99,1,2,Transformer Sparse (matmul.cu SDDMM),9.876,1.761,0.14,0.283,0
+sparse,4096,768,10,0.99,2,0,Transformer Sparse (matmul.cu SDDMM),5.741,0.735,0.147,0.148,0
+sparse,4096,768,10,0.99,2,1,Transformer Sparse (matmul.cu SDDMM),5.769,0.737,0.151,0.148,0
+sparse,4096,768,10,0.99,2,2,Transformer Sparse (matmul.cu SDDMM),5.825,0.739,0.149,0.149,0
+sparse,4096,768,10,0.99,8,0,Transformer Sparse (matmul.cu SDDMM),3.043,0.115,0.142,0.1,0
+sparse,4096,768,10,0.99,8,1,Transformer Sparse (matmul.cu SDDMM),3.031,0.113,0.148,0.099,0
+sparse,4096,768,10,0.99,8,2,Transformer Sparse (matmul.cu SDDMM),3.024,0.113,0.143,0.099,0
+sparse,4096,768,10,0.99,32,0,Transformer Sparse (matmul.cu SDDMM),2.545,0.18,0.139,0.067,0
+sparse,4096,768,10,0.99,32,1,Transformer Sparse (matmul.cu SDDMM),2.556,0.178,0.15,0.069,0
+sparse,4096,768,10,0.99,32,2,Transformer Sparse (matmul.cu SDDMM),2.559,0.178,0.161,0.067,0
+sparse,16384,768,10,0.5,1,0,Transformer Sparse (matmul.cu SDDMM),268.958,50.694,0.962,166.612,0
+sparse,16384,768,10,0.5,1,1,Transformer Sparse (matmul.cu SDDMM),269.68,50.868,0.966,166.621,0
+sparse,16384,768,10,0.5,1,2,Transformer Sparse (matmul.cu SDDMM),270.276,50.889,0.964,166.75,0
+sparse,16384,768,10,0.5,2,0,Transformer Sparse (matmul.cu SDDMM),152.994,38.993,0.945,81.848,0
+sparse,16384,768,10,0.5,2,1,Transformer Sparse (matmul.cu SDDMM),153.443,39.067,0.948,81.56,0
+sparse,16384,768,10,0.5,2,2,Transformer Sparse (matmul.cu SDDMM),153.499,39.101,0.949,81.969,0
+sparse,16384,768,10,0.5,8,0,Transformer Sparse (matmul.cu SDDMM),95.722,33.048,0.959,47.484,0
+sparse,16384,768,10,0.5,8,1,Transformer Sparse (matmul.cu SDDMM),95.811,33.084,0.941,47.466,0
+sparse,16384,768,10,0.5,8,2,Transformer Sparse (matmul.cu SDDMM),95.827,33.083,0.945,47.447,0
+sparse,16384,768,10,0.5,32,0,Transformer Sparse (matmul.cu SDDMM),80.845,32.874,0.917,35.416,0
+sparse,16384,768,10,0.5,32,1,Transformer Sparse (matmul.cu SDDMM),80.858,32.916,0.907,35.401,0
+sparse,16384,768,10,0.5,32,2,Transformer Sparse (matmul.cu SDDMM),81.327,33.236,0.924,35.491,0
+sparse,16384,768,10,0.9,1,0,Transformer Sparse (matmul.cu SDDMM),106.3,31.352,0.293,33.441,0
+sparse,16384,768,10,0.9,1,1,Transformer Sparse (matmul.cu SDDMM),106.134,31.29,0.295,33.443,0
+sparse,16384,768,10,0.9,1,2,Transformer Sparse (matmul.cu SDDMM),106.259,31.315,0.293,33.462,0
+sparse,16384,768,10,0.9,2,0,Transformer Sparse (matmul.cu SDDMM),61.767,22.735,0.283,16.083,0
+sparse,16384,768,10,0.9,2,1,Transformer Sparse (matmul.cu SDDMM),61.817,22.745,0.283,16.097,0
+sparse,16384,768,10,0.9,2,2,Transformer Sparse (matmul.cu SDDMM),61.913,22.827,0.281,16.12,0
+sparse,16384,768,10,0.9,8,0,Transformer Sparse (matmul.cu SDDMM),29.669,8.891,0.293,9.253,0
+sparse,16384,768,10,0.9,8,1,Transformer Sparse (matmul.cu SDDMM),29.658,8.888,0.291,9.253,0
+sparse,16384,768,10,0.9,8,2,Transformer Sparse (matmul.cu SDDMM),29.679,8.897,0.291,9.28,0
+sparse,16384,768,10,0.9,32,0,Transformer Sparse (matmul.cu SDDMM),23.915,6.953,0.284,6.394,0
+sparse,16384,768,10,0.9,32,1,Transformer Sparse (matmul.cu SDDMM),23.898,6.948,0.282,6.395,0
+sparse,16384,768,10,0.9,32,2,Transformer Sparse (matmul.cu SDDMM),23.945,6.957,0.296,6.398,0
+sparse,16384,768,10,0.95,1,0,Transformer Sparse (matmul.cu SDDMM),86.52,29.448,0.215,16.725,0
+sparse,16384,768,10,0.95,1,1,Transformer Sparse (matmul.cu SDDMM),86.719,29.469,0.213,16.718,0
+sparse,16384,768,10,0.95,1,2,Transformer Sparse (matmul.cu SDDMM),86.648,29.471,0.215,16.731,0
+sparse,16384,768,10,0.95,2,0,Transformer Sparse (matmul.cu SDDMM),50.717,20.939,0.209,7.606,0
+sparse,16384,768,10,0.95,2,1,Transformer Sparse (matmul.cu SDDMM),50.671,20.935,0.217,7.599,0
+sparse,16384,768,10,0.95,2,2,Transformer Sparse (matmul.cu SDDMM),50.663,20.972,0.213,7.618,0
+sparse,16384,768,10,0.95,8,0,Transformer Sparse (matmul.cu SDDMM),20.22,4.758,0.219,4.41,0
+sparse,16384,768,10,0.95,8,1,Transformer Sparse (matmul.cu SDDMM),20.3,4.751,0.217,4.412,0
+sparse,16384,768,10,0.95,8,2,Transformer Sparse (matmul.cu SDDMM),20.275,4.784,0.215,4.411,0
+sparse,16384,768,10,0.95,32,0,Transformer Sparse (matmul.cu SDDMM),17.2,3.697,0.21,3.214,0
+sparse,16384,768,10,0.95,32,1,Transformer Sparse (matmul.cu SDDMM),17.21,3.7,0.213,3.215,0
+sparse,16384,768,10,0.95,32,2,Transformer Sparse (matmul.cu SDDMM),17.218,3.687,0.215,3.201,0
+sparse,16384,768,10,0.99,1,0,Transformer Sparse (matmul.cu SDDMM),69.587,26.631,0.175,3.41,0
+sparse,16384,768,10,0.99,1,1,Transformer Sparse (matmul.cu SDDMM),69.756,26.581,0.171,3.421,0
+sparse,16384,768,10,0.99,1,2,Transformer Sparse (matmul.cu SDDMM),69.535,26.559,0.175,3.41,0
+sparse,16384,768,10,0.99,2,0,Transformer Sparse (matmul.cu SDDMM),34.142,11.015,0.168,1.645,0
+sparse,16384,768,10,0.99,2,1,Transformer Sparse (matmul.cu SDDMM),34.207,11.003,0.169,1.648,0
+sparse,16384,768,10,0.99,2,2,Transformer Sparse (matmul.cu SDDMM),34.109,11.007,0.171,1.645,0
+sparse,16384,768,10,0.99,8,0,Transformer Sparse (matmul.cu SDDMM),13.106,1.309,0.181,0.996,0
+sparse,16384,768,10,0.99,8,1,Transformer Sparse (matmul.cu SDDMM),13.131,1.307,0.177,1.003,0
+sparse,16384,768,10,0.99,8,2,Transformer Sparse (matmul.cu SDDMM),13.108,1.306,0.175,0.994,0
+sparse,16384,768,10,0.99,32,0,Transformer Sparse (matmul.cu SDDMM),11.836,1.012,0.188,0.719,0
+sparse,16384,768,10,0.99,32,1,Transformer Sparse (matmul.cu SDDMM),11.883,1.006,0.194,0.716,0
+sparse,16384,768,10,0.99,32,2,Transformer Sparse (matmul.cu SDDMM),11.862,1.01,0.213,0.713,0
+sparse,32768,768,10,0.5,1,0,Transformer Sparse (matmul.cu SDDMM),1041.112,216.38,3.948,682.925,0
+sparse,32768,768,10,0.5,1,1,Transformer Sparse (matmul.cu SDDMM),1044.14,217.545,3.836,685.174,0
+sparse,32768,768,10,0.5,1,2,Transformer Sparse (matmul.cu SDDMM),1044.905,217.919,3.845,686.315,0
+sparse,32768,768,10,0.5,2,0,Transformer Sparse (matmul.cu SDDMM),593.615,165.633,3.937,354.002,0
+sparse,32768,768,10,0.5,2,1,Transformer Sparse (matmul.cu SDDMM),594.286,166.071,3.931,354.16,0
+sparse,32768,768,10,0.5,2,2,Transformer Sparse (matmul.cu SDDMM),595.219,166.512,3.927,355.383,0
+sparse,32768,768,10,0.5,8,0,Transformer Sparse (matmul.cu SDDMM),368.444,138.103,3.808,189.059,0
+sparse,32768,768,10,0.5,8,1,Transformer Sparse (matmul.cu SDDMM),368.996,138.279,3.826,189.031,0
+sparse,32768,768,10,0.5,8,2,Transformer Sparse (matmul.cu SDDMM),369.536,138.956,3.802,188.98,0
+sparse,32768,768,10,0.5,32,0,Transformer Sparse (matmul.cu SDDMM),299.158,124.313,3.729,141.231,0
+sparse,32768,768,10,0.5,32,1,Transformer Sparse (matmul.cu SDDMM),299.217,124.323,3.739,141.541,0
+sparse,32768,768,10,0.5,32,2,Transformer Sparse (matmul.cu SDDMM),299.142,124.495,3.702,141.339,0
+sparse,32768,768,10,0.9,1,0,Transformer Sparse (matmul.cu SDDMM),379.94,131.457,0.776,137.518,0
+sparse,32768,768,10,0.9,1,1,Transformer Sparse (matmul.cu SDDMM),377.257,130.535,0.809,136.732,0
+sparse,32768,768,10,0.9,1,2,Transformer Sparse (matmul.cu SDDMM),376.896,129.817,0.789,136.73,0
+sparse,32768,768,10,0.9,2,0,Transformer Sparse (matmul.cu SDDMM),217.543,91.125,0.764,70.556,0
+sparse,32768,768,10,0.9,2,1,Transformer Sparse (matmul.cu SDDMM),217.541,91.276,0.782,70.274,0
+sparse,32768,768,10,0.9,2,2,Transformer Sparse (matmul.cu SDDMM),217.443,91.08,0.771,70.361,0
+sparse,32768,768,10,0.9,8,0,Transformer Sparse (matmul.cu SDDMM),100.285,35.295,0.745,37.971,0
+sparse,32768,768,10,0.9,8,1,Transformer Sparse (matmul.cu SDDMM),100.26,35.31,0.754,37.966,0
+sparse,32768,768,10,0.9,8,2,Transformer Sparse (matmul.cu SDDMM),100.467,35.387,0.748,38.03,0
+sparse,32768,768,10,0.9,32,0,Transformer Sparse (matmul.cu SDDMM),80.844,26.601,0.743,28.256,0
+sparse,32768,768,10,0.9,32,1,Transformer Sparse (matmul.cu SDDMM),80.843,26.606,0.748,28.276,0
+sparse,32768,768,10,0.9,32,2,Transformer Sparse (matmul.cu SDDMM),81.085,26.666,0.75,28.382,0
+sparse,32768,768,10,0.95,1,0,Transformer Sparse (matmul.cu SDDMM),295.306,121.274,0.485,68.702,0
+sparse,32768,768,10,0.95,1,1,Transformer Sparse (matmul.cu SDDMM),294.679,120.723,0.471,68.525,0
+sparse,32768,768,10,0.95,1,2,Transformer Sparse (matmul.cu SDDMM),294.843,120.949,0.477,68.609,0
+sparse,32768,768,10,0.95,2,0,Transformer Sparse (matmul.cu SDDMM),171.799,83.301,0.45,34.344,0
+sparse,32768,768,10,0.95,2,1,Transformer Sparse (matmul.cu SDDMM),171.723,83.492,0.462,34.268,0
+sparse,32768,768,10,0.95,2,2,Transformer Sparse (matmul.cu SDDMM),172.008,83.49,0.451,34.459,0
+sparse,32768,768,10,0.95,8,0,Transformer Sparse (matmul.cu SDDMM),62.064,18.674,0.431,19.122,0
+sparse,32768,768,10,0.95,8,1,Transformer Sparse (matmul.cu SDDMM),62.082,18.713,0.429,19.105,0
+sparse,32768,768,10,0.95,8,2,Transformer Sparse (matmul.cu SDDMM),62.171,18.752,0.435,19.139,0
+sparse,32768,768,10,0.95,32,0,Transformer Sparse (matmul.cu SDDMM),53.279,14.176,0.43,14.218,0
+sparse,32768,768,10,0.95,32,1,Transformer Sparse (matmul.cu SDDMM),53.257,14.175,0.43,14.211,0
+sparse,32768,768,10,0.95,32,2,Transformer Sparse (matmul.cu SDDMM),53.51,14.308,0.435,14.327,0
+sparse,32768,768,10,0.99,1,0,Transformer Sparse (matmul.cu SDDMM),222.655,107.773,0.248,13.99,0
+sparse,32768,768,10,0.99,1,1,Transformer Sparse (matmul.cu SDDMM),223.736,107.537,0.259,14.012,0
+sparse,32768,768,10,0.99,1,2,Transformer Sparse (matmul.cu SDDMM),222.391,107.582,0.25,14.003,0
+sparse,32768,768,10,0.99,2,0,Transformer Sparse (matmul.cu SDDMM),98.417,43.526,0.238,6.264,0
+sparse,32768,768,10,0.99,2,1,Transformer Sparse (matmul.cu SDDMM),98.412,43.521,0.244,6.272,0
+sparse,32768,768,10,0.99,2,2,Transformer Sparse (matmul.cu SDDMM),98.277,43.469,0.241,6.266,0
+sparse,32768,768,10,0.99,8,0,Transformer Sparse (matmul.cu SDDMM),31.622,4.974,0.22,3.676,0
+sparse,32768,768,10,0.99,8,1,Transformer Sparse (matmul.cu SDDMM),31.663,4.965,0.223,3.673,0
+sparse,32768,768,10,0.99,8,2,Transformer Sparse (matmul.cu SDDMM),31.591,4.969,0.228,3.69,0
+sparse,32768,768,10,0.99,32,0,Transformer Sparse (matmul.cu SDDMM),30.661,3.901,0.247,2.665,0
+sparse,32768,768,10,0.99,32,1,Transformer Sparse (matmul.cu SDDMM),30.65,3.901,0.247,2.665,0
+sparse,32768,768,10,0.99,32,2,Transformer Sparse (matmul.cu SDDMM),30.547,3.853,0.243,2.615,0
+naive,1024,768,10,0.5,1,0,TransformerNaive,1.335,0.201,0.126,0.214,0
+naive,1024,768,10,0.5,1,1,TransformerNaive,1.331,0.199,0.127,0.214,0
+naive,1024,768,10,0.5,1,2,TransformerNaive,1.338,0.199,0.125,0.214,0
+naive,1024,768,10,0.5,2,0,TransformerNaive,1.337,0.199,0.126,0.213,0
+naive,1024,768,10,0.5,2,1,TransformerNaive,1.332,0.201,0.127,0.216,0
+naive,1024,768,10,0.5,2,2,TransformerNaive,1.357,0.199,0.125,0.216,0
+naive,1024,768,10,0.5,8,0,TransformerNaive,1.341,0.199,0.126,0.215,0
+naive,1024,768,10,0.5,8,1,TransformerNaive,1.346,0.199,0.125,0.214,0
+naive,1024,768,10,0.5,8,2,TransformerNaive,1.338,0.199,0.127,0.216,0
+naive,1024,768,10,0.5,32,0,TransformerNaive,1.328,0.199,0.126,0.214,0
+naive,1024,768,10,0.5,32,1,TransformerNaive,1.348,0.199,0.128,0.216,0
+naive,1024,768,10,0.5,32,2,TransformerNaive,1.331,0.197,0.125,0.214,0
+naive,1024,768,10,0.9,1,0,TransformerNaive,1.33,0.199,0.128,0.216,0
+naive,1024,768,10,0.9,1,1,TransformerNaive,1.348,0.199,0.126,0.214,0
+naive,1024,768,10,0.9,1,2,TransformerNaive,1.331,0.199,0.127,0.214,0
+naive,1024,768,10,0.9,2,0,TransformerNaive,1.33,0.199,0.126,0.215,0
+naive,1024,768,10,0.9,2,1,TransformerNaive,1.336,0.199,0.126,0.216,0
+naive,1024,768,10,0.9,2,2,TransformerNaive,1.33,0.199,0.127,0.216,0
+naive,1024,768,10,0.9,8,0,TransformerNaive,1.348,0.199,0.126,0.214,0
+naive,1024,768,10,0.9,8,1,TransformerNaive,1.338,0.199,0.127,0.217,0
+naive,1024,768,10,0.9,8,2,TransformerNaive,1.338,0.199,0.124,0.214,0
+naive,1024,768,10,0.9,32,0,TransformerNaive,1.33,0.199,0.124,0.215,0
+naive,1024,768,10,0.9,32,1,TransformerNaive,1.33,0.199,0.124,0.214,0
+naive,1024,768,10,0.9,32,2,TransformerNaive,1.335,0.199,0.125,0.214,0
+naive,1024,768,10,0.95,1,0,TransformerNaive,1.337,0.199,0.126,0.214,0
+naive,1024,768,10,0.95,1,1,TransformerNaive,1.336,0.199,0.125,0.215,0
+naive,1024,768,10,0.95,1,2,TransformerNaive,1.332,0.199,0.124,0.214,0
+naive,1024,768,10,0.95,2,0,TransformerNaive,1.342,0.199,0.124,0.214,0
+naive,1024,768,10,0.95,2,1,TransformerNaive,1.337,0.199,0.124,0.215,0
+naive,1024,768,10,0.95,2,2,TransformerNaive,1.334,0.199,0.126,0.213,0
+naive,1024,768,10,0.95,8,0,TransformerNaive,1.329,0.201,0.127,0.214,0
+naive,1024,768,10,0.95,8,1,TransformerNaive,1.328,0.199,0.125,0.214,0
+naive,1024,768,10,0.95,8,2,TransformerNaive,1.331,0.199,0.138,0.215,0
+naive,1024,768,10,0.95,32,0,TransformerNaive,1.328,0.199,0.124,0.214,0
+naive,1024,768,10,0.95,32,1,TransformerNaive,1.33,0.199,0.124,0.214,0
+naive,1024,768,10,0.95,32,2,TransformerNaive,1.328,0.199,0.126,0.214,0
+naive,1024,768,10,0.99,1,0,TransformerNaive,1.33,0.199,0.123,0.215,0
+naive,1024,768,10,0.99,1,1,TransformerNaive,1.339,0.199,0.129,0.214,0
+naive,1024,768,10,0.99,1,2,TransformerNaive,1.334,0.199,0.126,0.215,0
+naive,1024,768,10,0.99,2,0,TransformerNaive,1.335,0.199,0.13,0.215,0
+naive,1024,768,10,0.99,2,1,TransformerNaive,1.337,0.199,0.125,0.214,0
+naive,1024,768,10,0.99,2,2,TransformerNaive,1.336,0.199,0.125,0.214,0
+naive,1024,768,10,0.99,8,0,TransformerNaive,1.335,0.199,0.127,0.216,0
+naive,1024,768,10,0.99,8,1,TransformerNaive,1.347,0.199,0.126,0.215,0
+naive,1024,768,10,0.99,8,2,TransformerNaive,1.341,0.199,0.125,0.217,0
+naive,1024,768,10,0.99,32,0,TransformerNaive,1.349,0.199,0.125,0.214,0
+naive,1024,768,10,0.99,32,1,TransformerNaive,1.35,0.199,0.124,0.214,0
+naive,1024,768,10,0.99,32,2,TransformerNaive,1.331,0.199,0.125,0.216,0
+naive,4096,768,10,0.5,1,0,TransformerNaive,8.263,2.809,0.093,2.846,0
+naive,4096,768,10,0.5,1,1,TransformerNaive,8.26,2.802,0.09,2.854,0
+naive,4096,768,10,0.5,1,2,TransformerNaive,8.278,2.8,0.09,2.864,0
+naive,4096,768,10,0.5,2,0,TransformerNaive,8.259,2.803,0.089,2.877,0
+naive,4096,768,10,0.5,2,1,TransformerNaive,8.256,2.798,0.088,2.866,0
+naive,4096,768,10,0.5,2,2,TransformerNaive,8.255,2.802,0.088,2.852,0
+naive,4096,768,10,0.5,8,0,TransformerNaive,8.257,2.798,0.09,2.878,0
+naive,4096,768,10,0.5,8,1,TransformerNaive,8.274,2.799,0.088,2.869,0
+naive,4096,768,10,0.5,8,2,TransformerNaive,8.256,2.8,0.087,2.876,0
+naive,4096,768,10,0.5,32,0,TransformerNaive,8.256,2.8,0.087,2.856,0
+naive,4096,768,10,0.5,32,1,TransformerNaive,8.25,2.798,0.088,2.854,0
+naive,4096,768,10,0.5,32,2,TransformerNaive,8.265,2.81,0.087,2.858,0
+naive,4096,768,10,0.9,1,0,TransformerNaive,8.27,2.803,0.092,2.872,0
+naive,4096,768,10,0.9,1,1,TransformerNaive,8.283,2.802,0.09,2.869,0
+naive,4096,768,10,0.9,1,2,TransformerNaive,8.29,2.804,0.09,2.852,0
+naive,4096,768,10,0.9,2,0,TransformerNaive,8.257,2.802,0.086,2.866,0
+naive,4096,768,10,0.9,2,1,TransformerNaive,8.282,2.806,0.09,2.854,0
+naive,4096,768,10,0.9,2,2,TransformerNaive,8.251,2.805,0.086,2.85,0
+naive,4096,768,10,0.9,8,0,TransformerNaive,8.251,2.802,0.087,2.856,0
+naive,4096,768,10,0.9,8,1,TransformerNaive,8.271,2.804,0.086,2.858,0
+naive,4096,768,10,0.9,8,2,TransformerNaive,8.28,2.802,0.086,2.879,0
+naive,4096,768,10,0.9,32,0,TransformerNaive,8.252,2.802,0.087,2.86,0
+naive,4096,768,10,0.9,32,1,TransformerNaive,8.272,2.8,0.088,2.872,0
+naive,4096,768,10,0.9,32,2,TransformerNaive,8.259,2.803,0.093,2.866,0
+naive,4096,768,10,0.95,1,0,TransformerNaive,8.262,2.804,0.088,2.864,0
+naive,4096,768,10,0.95,1,1,TransformerNaive,8.28,2.806,0.088,2.848,0
+naive,4096,768,10,0.95,1,2,TransformerNaive,8.258,2.804,0.09,2.862,0
+naive,4096,768,10,0.95,2,0,TransformerNaive,8.258,2.806,0.086,2.862,0
+naive,4096,768,10,0.95,2,1,TransformerNaive,8.259,2.81,0.088,2.87,0
+naive,4096,768,10,0.95,2,2,TransformerNaive,8.272,2.802,0.086,2.852,0
+naive,4096,768,10,0.95,8,0,TransformerNaive,8.256,2.804,0.086,2.854,0
+naive,4096,768,10,0.95,8,1,TransformerNaive,8.277,2.804,0.089,2.854,0
+naive,4096,768,10,0.95,8,2,TransformerNaive,8.26,2.8,0.09,2.879,0
+naive,4096,768,10,0.95,32,0,TransformerNaive,8.261,2.8,0.088,2.866,0
+naive,4096,768,10,0.95,32,1,TransformerNaive,8.259,2.798,0.087,2.87,0
+naive,4096,768,10,0.95,32,2,TransformerNaive,8.253,2.801,0.096,2.854,0
+naive,4096,768,10,0.99,1,0,TransformerNaive,8.266,2.8,0.089,2.854,0
+naive,4096,768,10,0.99,1,1,TransformerNaive,8.27,2.802,0.094,2.848,0
+naive,4096,768,10,0.99,1,2,TransformerNaive,8.287,2.808,0.096,2.865,0
+naive,4096,768,10,0.99,2,0,TransformerNaive,8.256,2.806,0.086,2.856,0
+naive,4096,768,10,0.99,2,1,TransformerNaive,8.279,2.8,0.088,2.874,0
+naive,4096,768,10,0.99,2,2,TransformerNaive,8.256,2.802,0.086,2.852,0
+naive,4096,768,10,0.99,8,0,TransformerNaive,8.274,2.804,0.087,2.85,0
+naive,4096,768,10,0.99,8,1,TransformerNaive,8.252,2.796,0.086,2.856,0
+naive,4096,768,10,0.99,8,2,TransformerNaive,8.273,2.8,0.086,2.877,0
+naive,4096,768,10,0.99,32,0,TransformerNaive,8.253,2.801,0.088,2.856,0
+naive,4096,768,10,0.99,32,1,TransformerNaive,8.254,2.796,0.086,2.867,0
+naive,4096,768,10,0.99,32,2,TransformerNaive,8.271,2.802,0.086,2.854,0
+naive,16384,768,10,0.5,1,0,TransformerNaive,105.662,43.935,1.662,44.217,0
+naive,16384,768,10,0.5,1,1,TransformerNaive,105.644,43.933,1.662,44.214,0
+naive,16384,768,10,0.5,1,2,TransformerNaive,105.668,43.943,1.665,44.218,0
+naive,16384,768,10,0.5,2,0,TransformerNaive,105.626,43.928,1.668,44.205,0
+naive,16384,768,10,0.5,2,1,TransformerNaive,105.604,43.931,1.667,44.234,0
+naive,16384,768,10,0.5,2,2,TransformerNaive,105.616,43.942,1.671,44.216,0
+naive,16384,768,10,0.5,8,0,TransformerNaive,105.593,43.918,1.667,44.197,0
+naive,16384,768,10,0.5,8,1,TransformerNaive,105.637,43.917,1.673,44.197,0
+naive,16384,768,10,0.5,8,2,TransformerNaive,105.594,43.936,1.671,44.199,0
+naive,16384,768,10,0.5,32,0,TransformerNaive,105.615,43.939,1.669,44.201,0
+naive,16384,768,10,0.5,32,1,TransformerNaive,105.594,43.922,1.676,44.203,0
+naive,16384,768,10,0.5,32,2,TransformerNaive,105.595,43.939,1.677,44.221,0
+naive,16384,768,10,0.9,1,0,TransformerNaive,105.63,43.938,1.652,44.199,0
+naive,16384,768,10,0.9,1,1,TransformerNaive,105.618,43.92,1.659,44.2,0
+naive,16384,768,10,0.9,1,2,TransformerNaive,105.641,43.929,1.659,44.193,0
+naive,16384,768,10,0.9,2,0,TransformerNaive,105.618,43.918,1.656,44.195,0
+naive,16384,768,10,0.9,2,1,TransformerNaive,105.622,43.928,1.656,44.21,0
+naive,16384,768,10,0.9,2,2,TransformerNaive,105.568,43.925,1.656,44.206,0
+naive,16384,768,10,0.9,8,0,TransformerNaive,105.557,43.937,1.658,44.193,0
+naive,16384,768,10,0.9,8,1,TransformerNaive,105.571,43.934,1.661,44.195,0
+naive,16384,768,10,0.9,8,2,TransformerNaive,105.571,43.927,1.664,44.198,0
+naive,16384,768,10,0.9,32,0,TransformerNaive,105.539,43.911,1.657,44.174,0
+naive,16384,768,10,0.9,32,1,TransformerNaive,105.56,43.903,1.656,44.205,0
+naive,16384,768,10,0.9,32,2,TransformerNaive,105.567,43.925,1.659,44.183,0
+naive,16384,768,10,0.95,1,0,TransformerNaive,105.658,43.923,1.654,44.183,0
+naive,16384,768,10,0.95,1,1,TransformerNaive,105.602,43.92,1.656,44.177,0
+naive,16384,768,10,0.95,1,2,TransformerNaive,105.61,43.937,1.656,44.173,0
+naive,16384,768,10,0.95,2,0,TransformerNaive,105.57,43.922,1.655,44.207,0
+naive,16384,768,10,0.95,2,1,TransformerNaive,105.552,43.914,1.656,44.175,0
+naive,16384,768,10,0.95,2,2,TransformerNaive,105.613,43.914,1.655,44.197,0
+naive,16384,768,10,0.95,8,0,TransformerNaive,105.565,43.912,1.657,44.183,0
+naive,16384,768,10,0.95,8,1,TransformerNaive,105.575,43.909,1.658,44.193,0
+naive,16384,768,10,0.95,8,2,TransformerNaive,105.572,43.91,1.657,44.191,0
+naive,16384,768,10,0.95,32,0,TransformerNaive,105.589,43.914,1.658,44.162,0
+naive,16384,768,10,0.95,32,1,TransformerNaive,105.608,43.922,1.656,44.187,0
+naive,16384,768,10,0.95,32,2,TransformerNaive,105.648,43.916,1.655,44.165,0
+naive,16384,768,10,0.99,1,0,TransformerNaive,105.623,43.918,1.654,44.177,0
+naive,16384,768,10,0.99,1,1,TransformerNaive,105.608,43.916,1.654,44.203,0
+naive,16384,768,10,0.99,1,2,TransformerNaive,105.632,43.937,1.655,44.186,0
+naive,16384,768,10,0.99,2,0,TransformerNaive,105.633,43.931,1.654,44.201,0
+naive,16384,768,10,0.99,2,1,TransformerNaive,105.58,43.912,1.654,44.199,0
+naive,16384,768,10,0.99,2,2,TransformerNaive,105.589,43.918,1.655,44.215,0
+naive,16384,768,10,0.99,8,0,TransformerNaive,105.574,43.906,1.656,44.186,0
+naive,16384,768,10,0.99,8,1,TransformerNaive,105.609,43.911,1.656,44.185,0
+naive,16384,768,10,0.99,8,2,TransformerNaive,105.636,43.92,1.656,44.179,0
+naive,16384,768,10,0.99,32,0,TransformerNaive,105.683,43.906,1.655,44.187,0
+naive,16384,768,10,0.99,32,1,TransformerNaive,105.685,43.931,1.655,44.174,0
+naive,16384,768,10,0.99,32,2,TransformerNaive,105.748,43.93,1.659,44.183,0
+naive,32768,768,10,0.5,1,0,TransformerNaive,406.625,175.653,7.035,177.541,0
+naive,32768,768,10,0.5,1,1,TransformerNaive,406.037,175.659,6.988,177.441,0
+naive,32768,768,10,0.5,1,2,TransformerNaive,405.779,175.68,6.903,177.518,0
+naive,32768,768,10,0.5,2,0,TransformerNaive,405.975,175.655,6.989,177.598,0
+naive,32768,768,10,0.5,2,1,TransformerNaive,406.347,175.659,6.982,177.578,0
+naive,32768,768,10,0.5,2,2,TransformerNaive,407.064,175.617,7.061,177.551,0
+naive,32768,768,10,0.5,8,0,TransformerNaive,408.047,175.632,7.085,177.433,0
+naive,32768,768,10,0.5,8,1,TransformerNaive,408.705,175.786,7.137,177.621,0
+naive,32768,768,10,0.5,8,2,TransformerNaive,409.633,175.935,7.157,178.012,0
+naive,32768,768,10,0.5,32,0,TransformerNaive,410.094,176.049,7.136,178.105,0
+naive,32768,768,10,0.5,32,1,TransformerNaive,411.064,176.336,7.168,178.468,0
+naive,32768,768,10,0.5,32,2,TransformerNaive,411.475,176.484,7.202,178.814,0
+naive,32768,768,10,0.9,1,0,TransformerNaive,408.753,175.676,6.974,177.664,0
+naive,32768,768,10,0.9,1,1,TransformerNaive,406.91,175.649,6.865,177.568,0
+naive,32768,768,10,0.9,1,2,TransformerNaive,406.264,175.66,6.778,177.551,0
+naive,32768,768,10,0.9,2,0,TransformerNaive,406.441,175.668,6.898,177.56,0
+naive,32768,768,10,0.9,2,1,TransformerNaive,406.613,175.659,6.906,177.539,0
+naive,32768,768,10,0.9,2,2,TransformerNaive,407.163,175.942,6.877,177.549,0
+naive,32768,768,10,0.9,8,0,TransformerNaive,407.909,175.674,6.955,177.504,0
+naive,32768,768,10,0.9,8,1,TransformerNaive,408.453,175.755,7.0,177.591,0
+naive,32768,768,10,0.9,8,2,TransformerNaive,409.536,175.831,7.01,178.238,0
+naive,32768,768,10,0.9,32,0,TransformerNaive,409.889,176.035,7.054,178.113,0
+naive,32768,768,10,0.9,32,1,TransformerNaive,410.404,176.19,7.068,178.311,0
+naive,32768,768,10,0.9,32,2,TransformerNaive,411.352,176.552,7.101,178.869,0
+naive,32768,768,10,0.95,1,0,TransformerNaive,408.729,175.647,6.944,177.584,0
+naive,32768,768,10,0.95,1,1,TransformerNaive,407.087,175.662,6.861,177.471,0
+naive,32768,768,10,0.95,1,2,TransformerNaive,406.107,175.66,6.828,177.578,0
+naive,32768,768,10,0.95,2,0,TransformerNaive,405.746,175.656,6.833,177.541,0
+naive,32768,768,10,0.95,2,1,TransformerNaive,406.899,175.642,6.814,177.504,0
+naive,32768,768,10,0.95,2,2,TransformerNaive,407.237,175.624,6.882,177.529,0
+naive,32768,768,10,0.95,8,0,TransformerNaive,407.963,175.634,6.928,177.517,0
+naive,32768,768,10,0.95,8,1,TransformerNaive,408.56,175.753,6.971,177.639,0
+naive,32768,768,10,0.95,8,2,TransformerNaive,409.702,175.88,6.992,178.075,0
+naive,32768,768,10,0.95,32,0,TransformerNaive,409.873,176.014,7.012,178.178,0
+naive,32768,768,10,0.95,32,1,TransformerNaive,410.724,176.227,7.05,178.427,0
+naive,32768,768,10,0.95,32,2,TransformerNaive,411.813,176.56,7.079,178.992,0
+naive,32768,768,10,0.99,1,0,TransformerNaive,408.989,175.674,6.938,177.599,0
+naive,32768,768,10,0.99,1,1,TransformerNaive,407.243,175.641,6.82,177.507,0
+naive,32768,768,10,0.99,1,2,TransformerNaive,406.365,175.653,6.716,177.536,0
+naive,32768,768,10,0.99,2,0,TransformerNaive,406.58,175.635,6.763,177.547,0
+naive,32768,768,10,0.99,2,1,TransformerNaive,406.929,175.642,6.829,177.565,0
+naive,32768,768,10,0.99,2,2,TransformerNaive,407.473,175.608,6.866,177.561,0
+naive,32768,768,10,0.99,8,0,TransformerNaive,408.14,175.661,6.94,177.508,0
+naive,32768,768,10,0.99,8,1,TransformerNaive,409.046,175.8,6.962,177.832,0
+naive,32768,768,10,0.99,8,2,TransformerNaive,409.771,175.89,6.996,178.181,0
+naive,32768,768,10,0.99,32,0,TransformerNaive,410.306,176.036,7.006,178.301,0
+naive,32768,768,10,0.99,32,1,TransformerNaive,411.164,176.455,7.062,178.66,0
+naive,32768,768,10,0.99,32,2,TransformerNaive,411.71,176.637,7.073,179.018,0
+sparse2,1024,768,10,0.5,1,0,Transformer Sparse2 (sddmm.cu gather),6.237,3.122,0.125,0.678,0
+sparse2,1024,768,10,0.5,1,1,Transformer Sparse2 (sddmm.cu gather),6.227,3.107,0.123,0.682,0
+sparse2,1024,768,10,0.5,1,2,Transformer Sparse2 (sddmm.cu gather),6.251,3.139,0.123,0.68,0
+sparse2,1024,768,10,0.5,2,0,Transformer Sparse2 (sddmm.cu gather),3.514,1.608,0.164,0.352,0
+sparse2,1024,768,10,0.5,2,1,Transformer Sparse2 (sddmm.cu gather),3.507,1.618,0.123,0.35,0
+sparse2,1024,768,10,0.5,2,2,Transformer Sparse2 (sddmm.cu gather),3.497,1.612,0.123,0.348,0
+sparse2,1024,768,10,0.5,8,0,Transformer Sparse2 (sddmm.cu gather),1.939,0.904,0.123,0.217,0
+sparse2,1024,768,10,0.5,8,1,Transformer Sparse2 (sddmm.cu gather),1.938,0.905,0.124,0.219,0
+sparse2,1024,768,10,0.5,8,2,Transformer Sparse2 (sddmm.cu gather),1.896,0.87,0.123,0.214,0
+sparse2,1024,768,10,0.5,32,0,Transformer Sparse2 (sddmm.cu gather),1.543,0.571,0.125,0.155,0
+sparse2,1024,768,10,0.5,32,1,Transformer Sparse2 (sddmm.cu gather),1.54,0.578,0.121,0.156,0
+sparse2,1024,768,10,0.5,32,2,Transformer Sparse2 (sddmm.cu gather),1.558,0.571,0.121,0.157,0
+sparse2,1024,768,10,0.9,1,0,Transformer Sparse2 (sddmm.cu gather),3.296,1.104,0.127,0.162,0
+sparse2,1024,768,10,0.9,1,1,Transformer Sparse2 (sddmm.cu gather),3.294,1.104,0.122,0.162,0
+sparse2,1024,768,10,0.9,1,2,Transformer Sparse2 (sddmm.cu gather),3.345,1.105,0.123,0.16,0
+sparse2,1024,768,10,0.9,2,0,Transformer Sparse2 (sddmm.cu gather),2.142,0.74,0.119,0.086,0
+sparse2,1024,768,10,0.9,2,1,Transformer Sparse2 (sddmm.cu gather),2.142,0.741,0.12,0.083,0
+sparse2,1024,768,10,0.9,2,2,Transformer Sparse2 (sddmm.cu gather),2.165,0.763,0.12,0.084,0
+sparse2,1024,768,10,0.9,8,0,Transformer Sparse2 (sddmm.cu gather),1.167,0.387,0.121,0.064,0
+sparse2,1024,768,10,0.9,8,1,Transformer Sparse2 (sddmm.cu gather),1.159,0.379,0.122,0.06,0
+sparse2,1024,768,10,0.9,8,2,Transformer Sparse2 (sddmm.cu gather),1.175,0.383,0.121,0.062,0
+sparse2,1024,768,10,0.9,32,0,Transformer Sparse2 (sddmm.cu gather),1.109,0.316,0.123,0.04,0
+sparse2,1024,768,10,0.9,32,1,Transformer Sparse2 (sddmm.cu gather),1.108,0.317,0.123,0.041,0
+sparse2,1024,768,10,0.9,32,2,Transformer Sparse2 (sddmm.cu gather),1.121,0.316,0.126,0.04,0
+sparse2,1024,768,10,0.95,1,0,Transformer Sparse2 (sddmm.cu gather),3.051,0.988,0.119,0.09,0
+sparse2,1024,768,10,0.95,1,1,Transformer Sparse2 (sddmm.cu gather),3.041,0.991,0.123,0.092,0
+sparse2,1024,768,10,0.95,1,2,Transformer Sparse2 (sddmm.cu gather),3.049,0.99,0.12,0.094,0
+sparse2,1024,768,10,0.95,2,0,Transformer Sparse2 (sddmm.cu gather),1.85,0.475,0.122,0.051,0
+sparse2,1024,768,10,0.95,2,1,Transformer Sparse2 (sddmm.cu gather),1.839,0.477,0.122,0.051,0
+sparse2,1024,768,10,0.95,2,2,Transformer Sparse2 (sddmm.cu gather),1.841,0.501,0.121,0.052,0
+sparse2,1024,768,10,0.95,8,0,Transformer Sparse2 (sddmm.cu gather),1.13,0.373,0.125,0.043,0
+sparse2,1024,768,10,0.95,8,1,Transformer Sparse2 (sddmm.cu gather),1.133,0.376,0.127,0.041,0
+sparse2,1024,768,10,0.95,8,2,Transformer Sparse2 (sddmm.cu gather),1.138,0.394,0.127,0.039,0
+sparse2,1024,768,10,0.95,32,0,Transformer Sparse2 (sddmm.cu gather),1.107,0.318,0.13,0.026,0
+sparse2,1024,768,10,0.95,32,1,Transformer Sparse2 (sddmm.cu gather),1.113,0.317,0.128,0.024,0
+sparse2,1024,768,10,0.95,32,2,Transformer Sparse2 (sddmm.cu gather),1.117,0.318,0.128,0.029,0
+sparse2,1024,768,10,0.99,1,0,Transformer Sparse2 (sddmm.cu gather),2.893,0.908,0.128,0.039,0
+sparse2,1024,768,10,0.99,1,1,Transformer Sparse2 (sddmm.cu gather),2.888,0.897,0.122,0.041,0
+sparse2,1024,768,10,0.99,1,2,Transformer Sparse2 (sddmm.cu gather),2.902,0.906,0.126,0.041,0
+sparse2,1024,768,10,0.99,2,0,Transformer Sparse2 (sddmm.cu gather),1.756,0.422,0.127,0.026,0
+sparse2,1024,768,10,0.99,2,1,Transformer Sparse2 (sddmm.cu gather),1.755,0.423,0.121,0.027,0
+sparse2,1024,768,10,0.99,2,2,Transformer Sparse2 (sddmm.cu gather),1.762,0.425,0.122,0.027,0
+sparse2,1024,768,10,0.99,8,0,Transformer Sparse2 (sddmm.cu gather),1.097,0.353,0.13,0.02,0
+sparse2,1024,768,10,0.99,8,1,Transformer Sparse2 (sddmm.cu gather),1.104,0.356,0.129,0.023,0
+sparse2,1024,768,10,0.99,8,2,Transformer Sparse2 (sddmm.cu gather),1.081,0.347,0.123,0.023,0
+sparse2,1024,768,10,0.99,32,0,Transformer Sparse2 (sddmm.cu gather),1.18,0.318,0.191,0.014,0
+sparse2,1024,768,10,0.99,32,1,Transformer Sparse2 (sddmm.cu gather),1.162,0.317,0.177,0.012,0
+sparse2,1024,768,10,0.99,32,2,Transformer Sparse2 (sddmm.cu gather),1.159,0.317,0.165,0.012,0
+sparse2,4096,768,10,0.5,1,0,Transformer Sparse2 (sddmm.cu gather),60.43,41.098,0.191,10.169,0
+sparse2,4096,768,10,0.5,1,1,Transformer Sparse2 (sddmm.cu gather),60.454,41.113,0.189,10.497,0
+sparse2,4096,768,10,0.5,1,2,Transformer Sparse2 (sddmm.cu gather),60.504,41.132,0.192,10.173,0
+sparse2,4096,768,10,0.5,2,0,Transformer Sparse2 (sddmm.cu gather),30.651,20.301,0.154,4.787,0
+sparse2,4096,768,10,0.5,2,1,Transformer Sparse2 (sddmm.cu gather),30.631,20.314,0.157,4.8,0
+sparse2,4096,768,10,0.5,2,2,Transformer Sparse2 (sddmm.cu gather),30.67,20.318,0.153,4.798,0
+sparse2,4096,768,10,0.5,8,0,Transformer Sparse2 (sddmm.cu gather),14.371,8.643,0.18,2.762,0
+sparse2,4096,768,10,0.5,8,1,Transformer Sparse2 (sddmm.cu gather),14.362,8.657,0.178,2.768,0
+sparse2,4096,768,10,0.5,8,2,Transformer Sparse2 (sddmm.cu gather),14.366,8.637,0.179,2.76,0
+sparse2,4096,768,10,0.5,32,0,Transformer Sparse2 (sddmm.cu gather),10.111,5.731,0.183,2.048,0
+sparse2,4096,768,10,0.5,32,1,Transformer Sparse2 (sddmm.cu gather),10.114,5.728,0.177,2.046,0
+sparse2,4096,768,10,0.5,32,2,Transformer Sparse2 (sddmm.cu gather),9.944,5.595,0.177,2.025,0
+sparse2,4096,768,10,0.9,1,0,Transformer Sparse2 (sddmm.cu gather),18.85,8.799,0.161,2.094,0
+sparse2,4096,768,10,0.9,1,1,Transformer Sparse2 (sddmm.cu gather),18.849,8.808,0.158,2.099,0
+sparse2,4096,768,10,0.9,1,2,Transformer Sparse2 (sddmm.cu gather),18.854,8.797,0.16,2.098,0
+sparse2,4096,768,10,0.9,2,0,Transformer Sparse2 (sddmm.cu gather),10.519,4.702,0.131,1.003,0
+sparse2,4096,768,10,0.9,2,1,Transformer Sparse2 (sddmm.cu gather),10.534,4.684,0.136,1.004,0
+sparse2,4096,768,10,0.9,2,2,Transformer Sparse2 (sddmm.cu gather),10.515,4.695,0.129,1.005,0
+sparse2,4096,768,10,0.9,8,0,Transformer Sparse2 (sddmm.cu gather),5.353,2.09,0.161,0.586,0
+sparse2,4096,768,10,0.9,8,1,Transformer Sparse2 (sddmm.cu gather),5.333,2.086,0.158,0.584,0
+sparse2,4096,768,10,0.9,8,2,Transformer Sparse2 (sddmm.cu gather),5.341,2.087,0.158,0.588,0
+sparse2,4096,768,10,0.9,32,0,Transformer Sparse2 (sddmm.cu gather),3.915,1.326,0.161,0.43,0
+sparse2,4096,768,10,0.9,32,1,Transformer Sparse2 (sddmm.cu gather),3.909,1.321,0.157,0.431,0
+sparse2,4096,768,10,0.9,32,2,Transformer Sparse2 (sddmm.cu gather),3.915,1.322,0.166,0.427,0
+sparse2,4096,768,10,0.95,1,0,Transformer Sparse2 (sddmm.cu gather),13.216,4.283,0.162,1.088,0
+sparse2,4096,768,10,0.95,1,1,Transformer Sparse2 (sddmm.cu gather),13.202,4.29,0.162,1.083,0
+sparse2,4096,768,10,0.95,1,2,Transformer Sparse2 (sddmm.cu gather),13.208,4.3,0.158,1.088,0
+sparse2,4096,768,10,0.95,2,0,Transformer Sparse2 (sddmm.cu gather),7.78,2.551,0.127,0.53,0
+sparse2,4096,768,10,0.95,2,1,Transformer Sparse2 (sddmm.cu gather),7.777,2.568,0.128,0.53,0
+sparse2,4096,768,10,0.95,2,2,Transformer Sparse2 (sddmm.cu gather),7.78,2.574,0.13,0.525,0
+sparse2,4096,768,10,0.95,8,0,Transformer Sparse2 (sddmm.cu gather),4.244,1.296,0.155,0.309,0
+sparse2,4096,768,10,0.95,8,1,Transformer Sparse2 (sddmm.cu gather),4.26,1.302,0.157,0.31,0
+sparse2,4096,768,10,0.95,8,2,Transformer Sparse2 (sddmm.cu gather),4.239,1.29,0.154,0.314,0
+sparse2,4096,768,10,0.95,32,0,Transformer Sparse2 (sddmm.cu gather),3.208,0.822,0.162,0.234,0
+sparse2,4096,768,10,0.95,32,1,Transformer Sparse2 (sddmm.cu gather),3.204,0.825,0.162,0.235,0
+sparse2,4096,768,10,0.95,32,2,Transformer Sparse2 (sddmm.cu gather),3.217,0.826,0.168,0.238,0
+sparse2,4096,768,10,0.99,1,0,Transformer Sparse2 (sddmm.cu gather),10.848,2.979,0.158,0.279,0
+sparse2,4096,768,10,0.99,1,1,Transformer Sparse2 (sddmm.cu gather),10.841,2.986,0.159,0.279,0
+sparse2,4096,768,10,0.99,1,2,Transformer Sparse2 (sddmm.cu gather),10.865,2.982,0.157,0.278,0
+sparse2,4096,768,10,0.99,2,0,Transformer Sparse2 (sddmm.cu gather),5.824,1.118,0.126,0.15,0
+sparse2,4096,768,10,0.99,2,1,Transformer Sparse2 (sddmm.cu gather),5.813,1.129,0.127,0.15,0
+sparse2,4096,768,10,0.99,2,2,Transformer Sparse2 (sddmm.cu gather),5.82,1.127,0.127,0.156,0
+sparse2,4096,768,10,0.99,8,0,Transformer Sparse2 (sddmm.cu gather),3.304,0.689,0.165,0.092,0
+sparse2,4096,768,10,0.99,8,1,Transformer Sparse2 (sddmm.cu gather),3.303,0.684,0.161,0.092,0
+sparse2,4096,768,10,0.99,8,2,Transformer Sparse2 (sddmm.cu gather),3.343,0.699,0.188,0.096,0
+sparse2,4096,768,10,0.99,32,0,Transformer Sparse2 (sddmm.cu gather),2.45,0.339,0.159,0.07,0
+sparse2,4096,768,10,0.99,32,1,Transformer Sparse2 (sddmm.cu gather),2.444,0.32,0.16,0.069,0
+sparse2,4096,768,10,0.99,32,2,Transformer Sparse2 (sddmm.cu gather),2.452,0.322,0.166,0.07,0
+sparse2,16384,768,10,0.5,1,0,Transformer Sparse2 (sddmm.cu gather),858.602,641.989,1.007,166.535,0
+sparse2,16384,768,10,0.5,1,1,Transformer Sparse2 (sddmm.cu gather),858.486,641.774,1.029,166.519,0
+sparse2,16384,768,10,0.5,1,2,Transformer Sparse2 (sddmm.cu gather),858.08,641.418,0.998,166.55,0
+sparse2,16384,768,10,0.5,2,0,Transformer Sparse2 (sddmm.cu gather),425.073,316.741,1.008,80.506,0
+sparse2,16384,768,10,0.5,2,1,Transformer Sparse2 (sddmm.cu gather),425.01,316.747,0.985,80.497,0
+sparse2,16384,768,10,0.5,2,2,Transformer Sparse2 (sddmm.cu gather),425.079,316.76,0.981,80.497,0
+sparse2,16384,768,10,0.5,8,0,Transformer Sparse2 (sddmm.cu gather),194.741,132.134,0.972,47.476,0
+sparse2,16384,768,10,0.5,8,1,Transformer Sparse2 (sddmm.cu gather),194.801,132.137,0.982,47.468,0
+sparse2,16384,768,10,0.5,8,2,Transformer Sparse2 (sddmm.cu gather),194.757,132.159,0.965,47.497,0
+sparse2,16384,768,10,0.5,32,0,Transformer Sparse2 (sddmm.cu gather),134.651,86.58,0.992,35.362,0
+sparse2,16384,768,10,0.5,32,1,Transformer Sparse2 (sddmm.cu gather),134.759,86.576,0.954,35.42,0
+sparse2,16384,768,10,0.5,32,2,Transformer Sparse2 (sddmm.cu gather),135.068,86.824,0.971,35.478,0
+sparse2,16384,768,10,0.9,1,0,Transformer Sparse2 (sddmm.cu gather),204.146,129.8,0.297,33.442,0
+sparse2,16384,768,10,0.9,1,1,Transformer Sparse2 (sddmm.cu gather),204.109,129.829,0.325,33.459,0
+sparse2,16384,768,10,0.9,1,2,Transformer Sparse2 (sddmm.cu gather),204.305,129.861,0.293,33.462,0
+sparse2,16384,768,10,0.9,2,0,Transformer Sparse2 (sddmm.cu gather),102.782,64.599,0.302,16.15,0
+sparse2,16384,768,10,0.9,2,1,Transformer Sparse2 (sddmm.cu gather),102.754,64.592,0.292,16.134,0
+sparse2,16384,768,10,0.9,2,2,Transformer Sparse2 (sddmm.cu gather),102.835,64.611,0.299,16.181,0
+sparse2,16384,768,10,0.9,8,0,Transformer Sparse2 (sddmm.cu gather),47.726,27.284,0.311,9.257,0
+sparse2,16384,768,10,0.9,8,1,Transformer Sparse2 (sddmm.cu gather),47.68,27.273,0.289,9.253,0
+sparse2,16384,768,10,0.9,8,2,Transformer Sparse2 (sddmm.cu gather),47.717,27.308,0.313,9.281,0
+sparse2,16384,768,10,0.9,32,0,Transformer Sparse2 (sddmm.cu gather),34.318,17.724,0.305,6.389,0
+sparse2,16384,768,10,0.9,32,1,Transformer Sparse2 (sddmm.cu gather),34.342,17.723,0.292,6.395,0
+sparse2,16384,768,10,0.9,32,2,Transformer Sparse2 (sddmm.cu gather),34.338,17.721,0.299,6.4,0
+sparse2,16384,768,10,0.95,1,0,Transformer Sparse2 (sddmm.cu gather),125.794,69.243,0.228,16.74,0
+sparse2,16384,768,10,0.95,1,1,Transformer Sparse2 (sddmm.cu gather),125.762,69.228,0.227,16.73,0
+sparse2,16384,768,10,0.95,1,2,Transformer Sparse2 (sddmm.cu gather),125.861,69.272,0.223,16.733,0
+sparse2,16384,768,10,0.95,2,0,Transformer Sparse2 (sddmm.cu gather),62.411,33.244,0.214,7.609,0
+sparse2,16384,768,10,0.95,2,1,Transformer Sparse2 (sddmm.cu gather),62.377,33.236,0.218,7.62,0
+sparse2,16384,768,10,0.95,2,2,Transformer Sparse2 (sddmm.cu gather),62.362,33.266,0.215,7.614,0
+sparse2,16384,768,10,0.95,8,0,Transformer Sparse2 (sddmm.cu gather),29.159,14.138,0.211,4.423,0
+sparse2,16384,768,10,0.95,8,1,Transformer Sparse2 (sddmm.cu gather),29.171,14.135,0.21,4.403,0
+sparse2,16384,768,10,0.95,8,2,Transformer Sparse2 (sddmm.cu gather),29.219,14.164,0.207,4.417,0
+sparse2,16384,768,10,0.95,32,0,Transformer Sparse2 (sddmm.cu gather),22.14,9.078,0.214,3.224,0
+sparse2,16384,768,10,0.95,32,1,Transformer Sparse2 (sddmm.cu gather),22.172,9.07,0.222,3.219,0
+sparse2,16384,768,10,0.95,32,2,Transformer Sparse2 (sddmm.cu gather),22.14,9.042,0.224,3.204,0
+sparse2,16384,768,10,0.99,1,0,Transformer Sparse2 (sddmm.cu gather),57.263,14.886,0.182,3.413,0
+sparse2,16384,768,10,0.99,1,1,Transformer Sparse2 (sddmm.cu gather),57.259,14.889,0.181,3.424,0
+sparse2,16384,768,10,0.99,1,2,Transformer Sparse2 (sddmm.cu gather),57.242,14.879,0.182,3.414,0
+sparse2,16384,768,10,0.99,2,0,Transformer Sparse2 (sddmm.cu gather),31.347,8.646,0.182,1.646,0
+sparse2,16384,768,10,0.99,2,1,Transformer Sparse2 (sddmm.cu gather),31.308,8.646,0.18,1.647,0
+sparse2,16384,768,10,0.99,2,2,Transformer Sparse2 (sddmm.cu gather),31.332,8.649,0.181,1.646,0
+sparse2,16384,768,10,0.99,8,0,Transformer Sparse2 (sddmm.cu gather),15.051,3.763,0.179,0.995,0
+sparse2,16384,768,10,0.99,8,1,Transformer Sparse2 (sddmm.cu gather),15.11,3.764,0.18,0.991,0
+sparse2,16384,768,10,0.99,8,2,Transformer Sparse2 (sddmm.cu gather),15.1,3.769,0.182,0.993,0
+sparse2,16384,768,10,0.99,32,0,Transformer Sparse2 (sddmm.cu gather),12.41,2.025,0.21,0.715,0
+sparse2,16384,768,10,0.99,32,1,Transformer Sparse2 (sddmm.cu gather),12.432,2.029,0.215,0.716,0
+sparse2,16384,768,10,0.99,32,2,Transformer Sparse2 (sddmm.cu gather),12.436,2.023,0.224,0.712,0
+sparse2,32768,768,10,0.5,1,0,Transformer Sparse2 (sddmm.cu gather),3377.41,2558.656,3.754,675.726,0
+sparse2,32768,768,10,0.5,1,1,Transformer Sparse2 (sddmm.cu gather),3381.283,2557.976,3.812,679.56,0
+sparse2,32768,768,10,0.5,1,2,Transformer Sparse2 (sddmm.cu gather),3383.454,2558.013,3.801,682.98,0
+sparse2,32768,768,10,0.5,2,0,Transformer Sparse2 (sddmm.cu gather),1680.344,1263.479,3.828,346.062,0
+sparse2,32768,768,10,0.5,2,1,Transformer Sparse2 (sddmm.cu gather),1680.353,1263.123,3.837,345.25,0
+sparse2,32768,768,10,0.5,2,2,Transformer Sparse2 (sddmm.cu gather),1680.088,1263.26,3.784,345.6,0
+sparse2,32768,768,10,0.5,8,0,Transformer Sparse2 (sddmm.cu gather),755.384,526.175,3.86,189.104,0
+sparse2,32768,768,10,0.5,8,1,Transformer Sparse2 (sddmm.cu gather),755.394,526.465,3.899,189.037,0
+sparse2,32768,768,10,0.5,8,2,Transformer Sparse2 (sddmm.cu gather),754.968,525.917,3.861,189.11,0
+sparse2,32768,768,10,0.5,32,0,Transformer Sparse2 (sddmm.cu gather),522.158,346.283,3.873,141.122,0
+sparse2,32768,768,10,0.5,32,1,Transformer Sparse2 (sddmm.cu gather),522.279,346.287,3.853,141.229,0
+sparse2,32768,768,10,0.5,32,2,Transformer Sparse2 (sddmm.cu gather),523.224,346.514,3.754,141.26,0
+sparse2,32768,768,10,0.9,1,0,Transformer Sparse2 (sddmm.cu gather),743.923,503.065,0.819,133.144,0
+sparse2,32768,768,10,0.9,1,1,Transformer Sparse2 (sddmm.cu gather),743.676,502.86,0.82,133.214,0
+sparse2,32768,768,10,0.9,1,2,Transformer Sparse2 (sddmm.cu gather),743.782,503.395,0.817,133.202,0
+sparse2,32768,768,10,0.9,2,0,Transformer Sparse2 (sddmm.cu gather),371.135,254.783,0.807,64.146,0
+sparse2,32768,768,10,0.9,2,1,Transformer Sparse2 (sddmm.cu gather),371.179,254.785,0.801,64.209,0
+sparse2,32768,768,10,0.9,2,2,Transformer Sparse2 (sddmm.cu gather),371.414,254.937,0.82,64.229,0
+sparse2,32768,768,10,0.9,8,0,Transformer Sparse2 (sddmm.cu gather),170.055,106.523,0.809,37.961,0
+sparse2,32768,768,10,0.9,8,1,Transformer Sparse2 (sddmm.cu gather),169.988,106.51,0.795,37.967,0
+sparse2,32768,768,10,0.9,8,2,Transformer Sparse2 (sddmm.cu gather),170.28,106.699,0.795,38.028,0
+sparse2,32768,768,10,0.9,32,0,Transformer Sparse2 (sddmm.cu gather),123.753,69.558,0.8,28.287,0
+sparse2,32768,768,10,0.9,32,1,Transformer Sparse2 (sddmm.cu gather),123.772,69.556,0.8,28.309,0
+sparse2,32768,768,10,0.9,32,2,Transformer Sparse2 (sddmm.cu gather),123.923,69.693,0.808,28.342,0
+sparse2,32768,768,10,0.95,1,0,Transformer Sparse2 (sddmm.cu gather),427.478,257.374,0.519,66.804,0
+sparse2,32768,768,10,0.95,1,1,Transformer Sparse2 (sddmm.cu gather),427.297,257.429,0.503,66.792,0
+sparse2,32768,768,10,0.95,1,2,Transformer Sparse2 (sddmm.cu gather),426.539,257.435,0.487,66.818,0
+sparse2,32768,768,10,0.95,2,0,Transformer Sparse2 (sddmm.cu gather),210.69,128.889,0.473,32.067,0
+sparse2,32768,768,10,0.95,2,1,Transformer Sparse2 (sddmm.cu gather),210.572,128.887,0.474,32.074,0
+sparse2,32768,768,10,0.95,2,2,Transformer Sparse2 (sddmm.cu gather),210.607,128.921,0.496,32.051,0
+sparse2,32768,768,10,0.95,8,0,Transformer Sparse2 (sddmm.cu gather),96.965,54.138,0.469,19.126,0
+sparse2,32768,768,10,0.95,8,1,Transformer Sparse2 (sddmm.cu gather),96.987,54.136,0.476,19.127,0
+sparse2,32768,768,10,0.95,8,2,Transformer Sparse2 (sddmm.cu gather),97.114,54.247,0.471,19.141,0
+sparse2,32768,768,10,0.95,32,0,Transformer Sparse2 (sddmm.cu gather),73.623,34.956,0.477,14.211,0
+sparse2,32768,768,10,0.95,32,1,Transformer Sparse2 (sddmm.cu gather),73.667,34.945,0.527,14.234,0
+sparse2,32768,768,10,0.95,32,2,Transformer Sparse2 (sddmm.cu gather),74.06,35.212,0.487,14.345,0
+sparse2,32768,768,10,0.99,1,0,Transformer Sparse2 (sddmm.cu gather),174.896,62.093,0.233,13.666,0
+sparse2,32768,768,10,0.99,1,1,Transformer Sparse2 (sddmm.cu gather),174.961,62.096,0.228,13.683,0
+sparse2,32768,768,10,0.99,1,2,Transformer Sparse2 (sddmm.cu gather),174.699,61.924,0.226,13.694,0
+sparse2,32768,768,10,0.99,2,0,Transformer Sparse2 (sddmm.cu gather),81.959,28.042,0.228,6.241,0
+sparse2,32768,768,10,0.99,2,1,Transformer Sparse2 (sddmm.cu gather),81.95,28.048,0.223,6.253,0
+sparse2,32768,768,10,0.99,2,2,Transformer Sparse2 (sddmm.cu gather),81.916,28.028,0.225,6.246,0
+sparse2,32768,768,10,0.99,8,0,Transformer Sparse2 (sddmm.cu gather),38.187,12.257,0.219,3.682,0
+sparse2,32768,768,10,0.99,8,1,Transformer Sparse2 (sddmm.cu gather),38.198,12.267,0.229,3.674,0
+sparse2,32768,768,10,0.99,8,2,Transformer Sparse2 (sddmm.cu gather),38.148,12.231,0.227,3.686,0
+sparse2,32768,768,10,0.99,32,0,Transformer Sparse2 (sddmm.cu gather),33.477,7.418,0.249,2.662,0
+sparse2,32768,768,10,0.99,32,1,Transformer Sparse2 (sddmm.cu gather),33.517,7.415,0.249,2.661,0
+sparse2,32768,768,10,0.99,32,2,Transformer Sparse2 (sddmm.cu gather),33.337,7.301,0.254,2.626,0

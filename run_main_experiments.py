@@ -20,7 +20,7 @@ SEEDS        = [0, 1, 2]
 D_DEFAULT = 768
 ITERS_DEFAULT = 10
 
-RESULT_RE = re.compile(r"^(Transformer\s+\S.*?)\s{2,}([0-9]+\.[0-9]+)\s*$")
+RESULT_RE = re.compile(r"^(Transformer\S*(?:\s+\S+)*?)\s{2,}([0-9]+\.[0-9]+)\s*$")
 KERNEL_RE = re.compile(r"^\[([^\]]+)\]\s+([0-9]+\.[0-9]+)\s*ms\s*$")
 
 
@@ -35,9 +35,12 @@ def parse_ms(stdout: str):
 def parse_kernels(stdout: str):
     """Extract sddmm / softmax / spmm timings from bench stdout.
 
-    bench prints '[kernel_label]  X.XXX ms' lines; for each kernel we keep the
-    last occurrence (steady-state) since matmul_tiled and friends repeat."""
-    last: dict[str, float | None] = {"sddmm_ms": None, "softmax_ms": None, "spmm_ms": None}
+    sparse / sparse2 print explicit [sddmm ...] / [spmm ...] lines.
+    naive does not — instead it issues 5 matmul_tiled calls per iter
+    (Q, K, V projections, then Q @ K^T, then attn @ V); the 4th maps to
+    sddmm and the 5th maps to spmm. We bucket by line label."""
+    out: dict[str, float | None] = {"sddmm_ms": None, "softmax_ms": None, "spmm_ms": None}
+    matmul_tiled_times: list[float] = []
     for line in stdout.splitlines():
         m = KERNEL_RE.match(line.strip())
         if not m:
@@ -45,12 +48,20 @@ def parse_kernels(stdout: str):
         head = m.group(1).strip().split()[0].lower()
         ms = float(m.group(2))
         if head.startswith("sddmm"):
-            last["sddmm_ms"] = ms
+            out["sddmm_ms"] = ms
         elif head.startswith("softmax"):
-            last["softmax_ms"] = ms
+            out["softmax_ms"] = ms
         elif head.startswith("spmm"):
-            last["spmm_ms"] = ms
-    return last
+            out["spmm_ms"] = ms
+        elif head.startswith("matmul_tiled"):
+            matmul_tiled_times.append(ms)
+
+    # Naive path: no sddmm/spmm lines, fall back to positional matmul_tiled.
+    if out["sddmm_ms"] is None and len(matmul_tiled_times) >= 4:
+        out["sddmm_ms"] = matmul_tiled_times[3]
+    if out["spmm_ms"] is None and len(matmul_tiled_times) >= 5:
+        out["spmm_ms"] = matmul_tiled_times[4]
+    return out
 
 
 def run_one(impl, N, d, iters, sparsity, granularity, seed):
