@@ -83,14 +83,82 @@ This picture degrades sharply at small granularities ($g \in \{1, 2, 4\}$). At $
 
 
 \section*{Approach}
-\subsection*{Tiled Matmul}
-Before diving into the three different kernels, it's best to start with a brief explanation of our baseline: Tiled Matrix Multiplication. In tiled matmul, we are multiplying two matrices, $A \in \mathbb{R}^{M \times K}, B \in \mathbb{R}^{K \times N}$, $A \cdot B = C$. To do this on an NVIDIA GPU, we utilize CUDA kernilization, targetting a Blackwell RTX 6000. 
+The main development focus of the project was on the three functions: Sparse Matrix Multiplication (SpMM), Sparse Dense Dense Matrix Multiplication (SDDMM), and Sparse Softmax. The entirety of the attention layer was written in CUDA, targeting an architecture of an RTX Blackwell 6000, which has a 128 KB L1 cache for shared memory, and 1024 threads in each thread block. 
 
-If you mapped each thread independently to a singular thread within a thread block, the code would be: $C_{ij} = \sum_{k = 0}^{K} A_{ik} \cdot B_{kj}$, launched for $M \cdot N$ threads. However, there is an opportunity for data reuse, a thread at location $C_{i, j}$, and a thread for $C_{i + 1, j}$ will both independently reload $A_i$. Thus we can utilize the shared memory on a thread block within CUDA cores (around 128 KB of L1 cache for Blackwell 6000), mapping each thread block to a $T \times T$ tile of $C$, where we load $a = A_{(i:i+T, k)}, b = B_{(k, j:j+t)} \forall k$. Then $C_{(i:i+T, j:j+T)} = ab$, and each element can be mapped to an individual thread. 
-% Insert Tiled Matmul BRIEF Pseudcode
+\subsection*{Tiled MatMul}
+Before describing the sparse functions, we first describe our hand written baseline, Tiled Matrix Multiplication. Given $A \in \mathbb{R}^{M \times K}$ and $B \in \mathbb{R}^{K \times N}$, we compute $C = A \cdot B$.
+
+The naive mapping launches one thread per output entry: thread $(i, j)$ computes $C_{ij} = \sum_{k=0}^{K-1} A_{ik} B_{kj}$. Every thread streams a full row of $A$ and a full column of $B$ from global memory, even though threads in the same row of the output tile share the row of $A$ and threads in the same column share the column of $B$. The reuse is large, but the naive kernel does not capture it.
+
+The tiled version stages both operands through shared memory. We partition $C$ into $T \times T$ tiles and assign one thread block of $T \times T$ threads to each tile, so every thread owns a single output entry. The block walks the shared $K$ dimension in chunks of $T$: each iteration cooperatively loads a $T \times T$ stripe of $A$ (rows $i_0{:}i_0+T$, columns $k_0{:}k_0+T$) and a $T \times T$ stripe of $B$ (rows $k_0{:}k_0+T$, columns $j_0{:}j_0+T$) into shared buffers $sA$ and $sB$, synchronizes, then has every thread accumulate its $C$ entry as a dot product across the $T$ columns of $sA$ and rows of $sB$. The accumulator lives in a register across the entire $K$ sweep and is written back once at the end. Each loaded entry of $A$ is reused $T$ times across the output tile's columns, and each entry of $B$ is reused $T$ times across its rows, which keeps the inner loop bandwidth-light. In practice we batch several $T$-wide stripes of $K$ per iteration to amortize the cost of the per-chunk synchronization.
+
+\begin{algorithm}[H]
+\caption{Tiled matrix multiplication for $C = A \cdot B$. One thread block per $T \times T$ output tile, one thread per output entry.}
+\begin{algorithmic}[1]
+\Statex \textbf{Block-level state:} tile origin $(i_0, j_0)$ in $C$; shared buffers $sA, sB \in \mathbb{R}^{T \times T}$
+\Statex \textbf{Thread-level state:} local coords $(i, j) \in [0, T)^2$; register $\mathrm{acc} \gets 0$
+\For{$k_0 = 0, T, 2T, \ldots, K - T$}
+    \State $sA[i, j] \gets A[i_0 + i,\ k_0 + j]$
+    \State $sB[i, j] \gets B[k_0 + i,\ j_0 + j]$
+    \State \textsc{syncthreads}
+    \For{$k = 0$ \textbf{to} $T - 1$}
+        \State $\mathrm{acc} \gets \mathrm{acc} + sA[i, k] \cdot sB[k, j]$
+    \EndFor
+    \State \textsc{syncthreads}
+\EndFor
+\State $C[i_0 + i,\ j_0 + j] \gets \mathrm{acc}$
+\end{algorithmic}
+\end{algorithm}
 
 \subsection*{Sparse Matrix Multiplication (SpMM)}
+In SpMM we compute $C = AB$ where $A$ is block-sparse (in BCSR form) and $B$ is dense. The opportunity is that $C_{ij} = \sum_{k=0}^{K-1} A_{ik} B_{kj}$ only takes contributions from values of $k$ where $A_{ik}$ is dense, so most of the $K$-dimension reduction can be skipped.
 
+\paragraph{General approach.}
+The natural starting point is to graft the sparse skip onto tiled matmul. A thread block still owns a $T \times T$ output tile and walks the $K$ dimension in $T$-wide chunks, but it only visits chunks that could contribute to its tile. The trouble is that a single block covers $T$ different rows of $A$, and those rows may have different sparsity patterns, so the block's column schedule has to be the \emph{union}
+\[
+\mathcal{K} \;=\; \bigcup_{i \in [i_0,\, i_0 + T)} \{\, k : A_{ik} \text{ is dense}\,\},
+\]
+i.e., every column index that is dense in at least one of the $T$ rows. The block loads the dense entries of $A$ on rows $[i_0, i_0+T)$ together with the rows of $B$ indexed by $k \in \mathcal{K}$ into shared memory, and each thread then accumulates over only the columns that are dense in \emph{its} own row.
+
+\begin{algorithm}[H]
+\caption{Sparse--dense matmul with row-union column scheduling. One thread block per $T \times T$ tile of $C$.}
+\begin{algorithmic}[1]
+\Statex \textbf{Block state:} tile origin $(i_0, j_0)$; $\mathcal{K} \gets \bigcup_{i \in [i_0, i_0 + T)} \{k : A_{ik} \text{ dense}\}$
+\Statex \textbf{Thread state:} local coords $(i, j) \in [0, T)^2$; register $\mathrm{acc} \gets 0$
+\For{each $T$-sized chunk of $\mathcal{K}$}
+    \State cooperatively load the dense $A_{i_0 + i,\, k}$ for $k$ in this chunk into $sA$
+    \State cooperatively load $B_{k,\, j_0 + j}$ for $k$ in this chunk into $sB$
+    \State \textsc{syncthreads}
+    \For{each $k$ in this chunk}
+        \If{$A_{i_0 + i,\, k}$ is dense}
+            \State $\mathrm{acc} \gets \mathrm{acc} + sA[i, k] \cdot sB[k, j]$
+        \EndIf
+    \EndFor
+    \State \textsc{syncthreads}
+\EndFor
+\State $C[i_0 + i,\, j_0 + j] \gets \mathrm{acc}$
+\end{algorithmic}
+\end{algorithm}
+
+This formulation has two problems:
+\begin{itemize}
+    \item \textbf{Load imbalance.} Threads in the same block iterate over different per-row sparsity patterns. The densest row sets the pace for the whole block, since every thread has to wait at \textsc{syncthreads} before the block can advance to the next chunk.
+    \item \textbf{Wasted bandwidth.} The loaded $sB$ chunk covers every column in $\mathcal{K}$, but each individual row of $A$ uses only its own subset. Threads load entries of $B$ they will never multiply, and the contiguous-column reads that vectorized loads depend on are punctured by skips wherever a row's pattern disagrees with $\mathcal{K}$.
+\end{itemize}
+
+Both problems come from forcing $T$ rows with potentially different sparsity patterns to share a single column schedule. The cleanest fix is to stop combining rows.
+
+\paragraph{Optimization 1: one row at a time.}
+We change the block's footprint from a $T \times T$ tile of $C$ to a $1 \times T^2$ stripe: a single row of $A$, paired with $T^2$ output columns. The thread count per block is unchanged, but now only one row of $A$ is in play, so $\mathcal{K}$ collapses to the sparsity pattern of that single row. The union disappears, every thread that loads a column of $B$ uses it, and every thread performs the same number of multiply-adds. Load imbalance and the vectorization problem both go away.
+
+\paragraph{Optimization 2: align rows with the sparsity granularity.}
+After implementing and testing the algorithm above, our measured speedups over the baseline were minimal. Profiling with Nsight Compute showed unexpectedly large load latencies in the kernel, and on inspection the cause was clear. Take $T = 16$ as a concrete case. In tiled matmul, a thread block outputs $T \times T = 256$ entries while loading $A_{i:i+T,\, k}$ and $B_{k,\, j:j+T}$ for all $k$, totaling $2TK$ elements. In the $1$-row mapping above, the same block still outputs $T^2 = 256$ entries (now as a $1 \times T^2$ stripe), but loads $A_{i,\, k}$ and $B_{k,\, j:j+T^2}$ for all $k$, totaling $(T^2 + 1)K$ elements. That is roughly \emph{$16\times$} more memory traffic per output entry than the dense baseline, which matches the load times we saw in profiling.
+
+We collapsed to a single row of $A$ in Optimization~1 to guarantee a consistent sparsity pattern across the rows in a block. But that constraint is softer than it looks: by construction, the mask is block-sparse at granularity $G$, so any consecutive $G$ rows of $A$ that fall inside the same row of $G \times G$ tiles share a sparsity pattern by definition. We therefore widen the block back out, mapping each block to a $G \times (T^2/G)$ tile of $C$. The total load per block becomes $(G + T^2/G)\,K$, which interpolates between the $1$-row case at $G = 1$ and the dense baseline at $G = T$, while preserving the single-pattern invariant that made Optimization~1 work in the first place. This 
+
+\subsection*{Sparse Dense Dense Matrix Multiplication (SDDMM)}
+
+\subsection*{SoftMax}
 
 \section*{Results}
 
