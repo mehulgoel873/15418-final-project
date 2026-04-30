@@ -7,7 +7,6 @@
 
 #include "transformer_naive.cuh"
 #include "transformer_sparse.cuh"
-#include "transformer_sparse_softmax.cuh"
 #include "timing.cuh"
 
 // x, mask, output, N, d, granularity
@@ -151,7 +150,7 @@ static float benchmark(ForwardFn fn, int N, int d, float p, int sparse_granulari
 
 static void usage(const char* prog) {
     fprintf(stderr,
-            "Usage: %s [--impl <naive|sparse|sparse_softmax>] [--check] [--sparsity <0.0-1.0>] [--granularity <int>] [--seed <int>] [N d [iters]]\n"
+            "Usage: %s [--impl <naive|sparse>] [--check] [--sparsity <0.0-1.0>] [--granularity <int>] [--seed <int>] [N d [iters]]\n"
             "  --impl        which transformer to run (default: naive)\n"
             "  --check       check correctness against naive implementation\n"
             "  --sparsity    percentage of attention tiles that are sparse (default: 0.5)\n"
@@ -224,13 +223,6 @@ int main(int argc, char** argv)
                 t.forward(x, mask, out, N, d, g);
             };
             check_correctness(naive_fn, test_fn, N, d, sparsity, granularity);
-        } else if (strcmp(impl, "sparse_softmax") == 0) {
-            srand(seed);
-            TransformerSparseSoftmax t(d);
-            auto test_fn = [&](float* x, float* mask, float* out, int N, int d, int g) {
-                t.forward(x, mask, out, N, d, g);
-            };
-            check_correctness(naive_fn, test_fn, N, d, sparsity, granularity);
         }
         printf("\n");
     } else if (do_check) {
@@ -250,12 +242,6 @@ int main(int argc, char** argv)
     } else if (strcmp(impl, "sparse") == 0) {
         TransformerSparse t(d);
         display_name = "Transformer Sparse";
-        ms = benchmark([&](float* x, float* mask, float* out, int N, int d, int g) {
-            t.forward(x, mask, out, N, d, g);
-        }, N, d, sparsity, granularity, iters);
-    } else if (strcmp(impl, "sparse_softmax") == 0) {
-        TransformerSparseSoftmax t(d);
-        display_name = "Transformer Sparse Softmax";
         ms = benchmark([&](float* x, float* mask, float* out, int N, int d, int g) {
             t.forward(x, mask, out, N, d, g);
         }, N, d, sparsity, granularity, iters);
