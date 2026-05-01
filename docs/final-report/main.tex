@@ -239,7 +239,7 @@ Two trends in Figure~\ref{fig:primary-speedup} stand out, neither of which is ob
 At small $N$, the dense projection matmuls that produce $Q$, $K$, $V$ do work comparable to the sparse SpMM/SDDMM/softmax stage, since $d = 768$ is on the same order as $N$ at the low end of the sweep. Amdahl's law then bounds the end-to-end speedup: even with infinitely fast sparse kernels, the projections still dominate the wall clock. As $N$ grows, the sparse stage's $O(N^2 d)$ cost overtakes the projections' $O(N d^2)$ cost, the projection share of the wall clock shrinks, and the per-kernel speedup our sparse implementation offers translates more directly into end-to-end speedup.
 
 \paragraph{Granularity.}
-At $G = 1$, neighboring threads in the same warp can land on independent sparsity decisions. Because warps execute in lockstep, the warp's cycle time is set by the lane with the most work, and at fine granularity almost every warp has at least one lane sitting on a dense element. The arithmetic skip is then essentially erased: lanes on sparse positions idle while the warp waits on the dense ones. Fine-grained sparsity also breaks vectorization: a \texttt{float4} load fetches four contiguous values in one instruction, but only when all four are needed; once adjacent lanes diverge on the mask, the load decays into single-element accesses. Coarser $G$ fixes both problems at once by guaranteeing that whole tiles share a sparsity decision, so warps stay aligned and contiguous loads survive. ML workloads in practice almost never use $G = 1$ for exactly these reasons, and our results confirm that fine-grained sparsity is the worst-case regime for any sparse-attention kernel.
+Fine-grained sparsity breaks vectorization: a \texttt{float4} load fetches four contiguous values in one instruction, but only when all four are needed; once adjacent lanes diverge on the mask, the load decays into single-element accesses. Additionally, memory loads can be coalesced when loading from adjacent values, but when loading at fine-grained sparsities, loads become uncoalesced, significantly harming speedup times.  Coarser $G$ fixes both problems at once by guaranteeing warps stay aligned and contiguous loads survive. ML workloads in practice almost never use $G = 1$ for exactly these reasons, and our results confirm that fine-grained sparsity is the worst-case regime for any sparse-attention kernel.
 
 \paragraph{Where the remaining gap comes from.}
 Even at a favorable corner of the sweep ($N = 32768$, $G = 8$, $p = 0.95$), where the upper bound $1/(1 - p) = 20$ should be close to attainable, we measure a $12\times$ end-to-end speedup. Figure~\ref{fig:stalls} explains the gap.
@@ -258,7 +258,7 @@ Even at a favorable corner of the sweep ($N = 32768$, $G = 8$, $p = 0.95$), wher
         \caption{Per-kernel warp-stall reasons.}
         \label{fig:stalls-breakdown}
     \end{subfigure}
-    \caption{Nsight Compute traces for the $N = 32768$ run. SDDMM and SpMM under-use DRAM bandwidth because most of their loads land in shared memory, while the sparse softmax shows noticeably higher global-memory traffic. The right panel attributes per-kernel stalls: \texttt{long\_scoreboard} flags warps waiting on global-memory loads, and \texttt{mio\_throttle} flags warps waiting on shared-memory loads.}
+    \caption{Nsight Compute traces for a $N = 32768, G = 8, p = 0.95$ run. SDDMM and SpMM under-use DRAM bandwidth because most of their loads land in shared memory, while the sparse softmax shows noticeably higher global-memory traffic. The right panel attributes per-kernel stalls: \texttt{long\_scoreboard} flags warps waiting on global-memory loads, and \texttt{mio\_throttle} flags warps waiting on shared-memory loads.}
     \label{fig:stalls}
 \end{figure}
 
@@ -297,7 +297,7 @@ Things of note:
         \caption{Per-kernel warp stall reasons for N = 32768}
         \label{fig:stalls-32678}
     \end{subfigure}
-    \caption{Nsight Compute traces for the $N = 32768$, $N = 1024$ run. Per-kernel stalls: \texttt{long\_scoreboard} flags warps waiting on global-memory loads, \texttt{mio\_throttle} flags warps waiting on shared-memory loads, \texttt{barrier} flags warps waiting on a synchronization call}. 
+    \caption{Nsight Compute traces for $N = 32768, G = 8, p = 0.95$, $N = 1024, G = 8, p = 0.95$ runs. Per-kernel stalls: \texttt{long\_scoreboard} flags warps waiting on global-memory loads, \texttt{mio\_throttle} flags warps waiting on shared-memory loads, \texttt{barrier} flags warps waiting on a synchronization call}. 
     \label{fig:stalls-problem-size}
 \end{figure}
 \subsection*{SoftMax}
