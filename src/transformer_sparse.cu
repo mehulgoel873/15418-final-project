@@ -6,6 +6,7 @@
 #include <cuda_runtime.h>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <math.h>
 
 static void rand_init_device_buf(float* d_ptr, int n) {

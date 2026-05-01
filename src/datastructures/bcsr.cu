@@ -1,6 +1,8 @@
 #include "bcsr.cuh"
 #include <cstdlib>
 #include <cstring>
+#include <cstdio>
+#include <chrono>
 #include <vector>
 
 __global__ void bcsr_pass1_kernel(const bool* tile_dense, int num_block_rows, int num_block_cols, int* row_nnz) {
@@ -72,6 +74,13 @@ BCSRMatrix::BCSRMatrix(const float* host_data, const bool* d_tile_dense, int M, 
         h_row_ptr[bi + 1] = h_row_ptr[bi] + h_row_nnz[bi];
     }
     view.nnzb = h_row_ptr[view.num_block_rows];
+
+    int max_K = 0;
+    for (int bi = 0; bi < view.num_block_rows; bi++) {
+        int k = h_row_ptr[bi + 1] - h_row_ptr[bi];
+        if (k > max_K) max_K = k;
+    }
+    view.max_block_row_K = max_K;
 
     cudaMemcpy(view.row_ptr, h_row_ptr.data(), (view.num_block_rows + 1) * sizeof(int), cudaMemcpyHostToDevice);
 

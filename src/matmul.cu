@@ -20,7 +20,7 @@ __global__ void matmul_kernel(float* A, float* B, float* output, int M, int N, i
 }
 
 /* 
-VERSION 1
+VERSION 1 - MAKE SURE TO KEEP ---
 // SpMM: sparse BCSR A (M x N) * dense B (N x K) -> dense output (M x K).
 // One block per scalar row of A, BN output columns per block. Each block walks
 // its row's K_b * T scalar nonzeros in chunks of TK = 32, gathers the

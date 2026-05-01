@@ -116,6 +116,56 @@ static float run_sparse_test(int M, int N, int K, float sparsity) {
     return diff;
 }
 
+// Run sddmm against the CPU reference. A is I x K, B is J x K (both row-major).
+// D's sparsity pattern is generated at the requested density; the CPU and GPU
+// outputs are compared element-wise on the .values strip.
+static float run_sddmm_test(int I, int J, int K, float sparsity, int TILING) {
+    int Tb_i = I / TILING;
+    int Tb_j = J / TILING;
+
+    size_t bytes_A = (size_t)I * K * sizeof(float);
+    size_t bytes_B = (size_t)J * K * sizeof(float);
+
+    float* h_A = (float*)malloc(bytes_A);
+    float* h_B = (float*)malloc(bytes_B);
+    rand_fill(h_A, I * K);
+    rand_fill(h_B, J * K);
+
+    bool* tile_dense = (bool*)malloc((size_t)Tb_i * Tb_j * sizeof(bool));
+    for (int bi = 0; bi < Tb_i; bi++)
+        for (int bj = 0; bj < Tb_j; bj++)
+            tile_dense[bi * Tb_j + bj] = ((float)rand() / RAND_MAX) >= sparsity;
+
+    BCSR D_gpu(nullptr, tile_dense, I, J, TILING);
+    BCSR D_cpu(nullptr, tile_dense, I, J, TILING);
+    free(tile_dense);
+
+    sddmm_cpu(h_A, h_B, D_cpu, K);
+
+    float *d_A, *d_B;
+    cudaMalloc(&d_A, bytes_A);
+    cudaMalloc(&d_B, bytes_B);
+    cudaMemcpy(d_A, h_A, bytes_A, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_B, h_B, bytes_B, cudaMemcpyHostToDevice);
+
+    sddmm(d_A, d_B, D_gpu, K);
+    cudaDeviceSynchronize();
+
+    BCSRView v_gpu = D_gpu.get_view();
+    BCSRView v_cpu = D_cpu.get_view();
+    size_t nvals = (size_t)v_gpu.nnzb * TILING * TILING;
+    float* h_gpu = (float*)malloc(nvals * sizeof(float));
+    float* h_cpu = (float*)malloc(nvals * sizeof(float));
+    cudaMemcpy(h_gpu, v_gpu.values, nvals * sizeof(float), cudaMemcpyDeviceToHost);
+    cudaMemcpy(h_cpu, v_cpu.values, nvals * sizeof(float), cudaMemcpyDeviceToHost);
+    float diff = max_abs_diff(h_gpu, h_cpu, (int)nvals);
+    free(h_gpu); free(h_cpu);
+
+    free(h_A); free(h_B);
+    cudaFree(d_A); cudaFree(d_B);
+    return diff;
+}
+
 struct TestCase { int M, N, K; };
 
 int main() {
@@ -181,5 +231,42 @@ int main() {
     }
 
     printf("\n%d/%zu passed\n", s_passed, sizeof(scases) / sizeof(scases[0]));
-    return (failed + s_failed) > 0 ? 1 : 0;
+
+    printf("\n--- sddmm (gpu vs cpu reference) ---\n");
+    printf("%-22s  %4s  %8s  %12s  %s\n",
+           "Shape (IxJxK)", "T", "Sparsity", "Max |diff|", "Result");
+    printf("%-22s  %4s  %8s  %12s  %s\n",
+           "----------------------", "----", "--------", "------------", "------");
+
+    struct SddmmCase { int I, J, K; float sparsity; int TILING; };
+    SddmmCase dcases[] = {
+        // TILING=32 (Phase 1 baseline).
+        {  64,  64,  32, 0.5f, 32 },
+        { 128, 128, 128, 0.5f, 32 },
+        { 128, 128, 128, 0.9f, 32 },
+        // TILING=16 / 8 (Phase 2).
+        { 128, 128, 128, 0.5f, 16 },
+        { 128, 128, 128, 0.9f, 16 },
+        { 128, 128, 128, 0.5f,  8 },
+        { 256, 128, 256, 0.7f,  8 },
+        // TILING=4 / 2 / 1 (Phase 3).
+        { 128, 128, 128, 0.5f,  4 },
+        { 128, 128, 128, 0.5f,  2 },
+        {  64,  64,  64, 0.5f,  1 },
+        {  64,  64,  64, 0.9f,  1 },
+    };
+
+    int d_passed = 0, d_failed = 0;
+    for (auto& dc : dcases) {
+        float diff = run_sddmm_test(dc.I, dc.J, dc.K, dc.sparsity, dc.TILING);
+        bool ok = diff < kTol;
+        ok ? d_passed++ : d_failed++;
+        printf("%dx%dx%-14d  %4d  %7.0f%%  %12.2e  %s\n",
+               dc.I, dc.J, dc.K, dc.TILING, dc.sparsity * 100.f,
+               diff, ok ? "PASS" : "FAIL");
+    }
+
+    printf("\n%d/%zu passed\n", d_passed, sizeof(dcases) / sizeof(dcases[0]));
+
+    return (failed + s_failed + d_failed) > 0 ? 1 : 0;
 }
