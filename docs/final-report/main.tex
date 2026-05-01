@@ -39,7 +39,11 @@
 
 
 \section*{Summary}
-Sparsity is a common pattern seen within attention layers of Transformers and other ML architectures. We generated random sparsity matrices for the score matrix and implemented blocked sparse versions of the attention operations in CUDA for NVIDIA GPUs. We then compared our implementation against a general optimized attention implementation, measuring speedup and the performance characteristics. 
+As modern Large Language Models scale to massive context lengths (now, millions of tokens), the standard attention mechanism is a severe computational bottleneck. Exploiting sparsity in the attention matrix, where many token interactions produce mathematically small outputs, reduces both training and inference costs. Research has demonstrated that transformers can maintain over 95\% accuracy is maintained with 90\% sparsity. However, efficiently parallelizing sparse operations on GPUs is non-trivial. Notable challenges include severe load imbalance, warp divergence, and uncoalesced memory accesses that perform poorly under the hardware's SIMT execution model. 
+
+We enforce sparsity at a block-level granularity (G) using a Blocked Compressed Sparse Row (BCSR) format to preserve contiguous memory accesses, vectorization, and cache locality. We implemented three core kernels in CUDA: Sampled Dense-Dense Matrix Multiplication (SDDMM), Sparse Softmax, and Sparse-Dense Matrix Multiplication (SpMM), focusing on dynamic warp-level active-coordinate gathering, static partitioned scheduling, and custom row-interleaved memory layouts to hide latency and maintain Streaming Multiprocessor (SM) occupancy.
+
+Our end-to-end evaluations on an RTX 6000 demonstrate that at large context lengths ($N \geq 16384$) and coarse granularities ($G \ge 8$), our sparse implementation effectively approaches theoretical maximum speedups, scaling proportionally to $\frac{1}{1-p}$. Broken down by kernel, the dynamic SDDMM successfully eliminates wasted arithmetic but exhibits shared-memory bandwidth bottlenecks at larger scales; the heavily memory-bound Sparse Softmax achieves granularity-invariant speedups through optimized, coalesced reduction passes, especially at large context lengths; and the SpMM kernel scales cleanly by maximizing data reuse along aligned, contiguous block reads.
 
 \section*{Background}
 \subsection*{Attention}
