@@ -16,8 +16,11 @@
 \usepackage{algpseudocode}
 \usepackage{placeins}
 \usepackage{tikz}
+\usepackage{url}
 \usetikzlibrary{arrows.meta, positioning, calc}
 \pgfplotsset{compat=1.18}
+
+\usepackage[colorlinks=true, linkcolor=blue, citecolor=blue, urlcolor=blue]{hyperref}
 
 \title{Blocked Dynamic Sparse Attention}
 \author{Mehul Goel (mehulg), Saransh Agrawal (saransh2) \\ \small Website: https://mehulgoel873.github.io/15418-final-project/}
@@ -58,34 +61,29 @@ MatMul~(4) forms the $N \times N$ score matrix $QK^T$, a row-wise softmax turns 
 
 The two highlighted stages in Figure~\ref{fig:attention} scale with the \emph{square} of the sequence length. MatMul~(4) materializes an $N \times N$ matrix, the softmax sweeps over it row by row, and MatMul~(5) reads it again. In practical settings $N \gg d$. Today's frontier models target context lengths of a million tokens or more, while $d$ is typically only 64 or 128 per head, so a single attention layer would touch on the order of $10^{12}$ entries in its intermediate matrix. Both the arithmetic and the memory traffic of storing and revisiting an $N \times N$ matrix become impractical at this scale.
 
-Each block in the figure maps well to a GPU on its own. The matrix multiplications are embarrassingly parallel: each output entry can be computed independently. The softmax requires a reduction along each row, but the rows themselves are independent and parallelize across $N$. The bottleneck is therefore not a lack of parallelism but the volume of computation and data movement on an $N \times N$ matrix at long context lengths. Most entries of the softmax output are close to zero (highlighted as ``sparse'' in Figure~\ref{fig:attention}), and that observation motivates the tiled and sparse approaches we explore in the rest of this report.
+Each block in the figure maps well to a GPU on its own. However, once you introduce sparsity to get rid of the operating on $N^2$ elements, the parallelization of the kernels becomes significantly more challenging.
 
 
 \subsection*{Sparsity}
 
-A long line of development and analysis of attention kernels in transformers has shown that the score matrix $\sigma(QK^T)$ produced by attention often has abundant sparsity: most of its entries are very small after the row-wise softmax, and the output of MatMul~(5) is dominated by a small fraction of the columns. This has motivated a broad family of \emph{sparse attention} schemes that fall into two camps. Static patterns (such as local windows, strided, or block-diagonal masks) fix a sparsity structure ahead of time and are easy to map onto regular GPU tile layouts. Dynamic patterns (such as top-$k$ or learned routing) choose which entries to keep based on the input itself, often giving better accuracy at a given sparsity level at the cost of more irregular computation~\cite{lin2021survey}.
+Analysis of attention kernels in transformers has shown that the score matrix $\sigma(QK^T)$ produced by attention often has abundant sparsity: most of its entries are very small after the row-wise softmax, and the output of MatMul~(5) is dominated by a small fraction of the columns. This has motivated a broad family of \emph{sparse attention} schemes that fall into two camps. Static patterns (such as local windows, strided, or block-diagonal masks) fix a sparsity structure ahead of time. Dynamic patterns (such as top-$k$ or learned routing) choose which entries to keep based on the input itself, often giving better accuracy at a given sparsity level at the cost of more irregular computation~\cite{lin2021survey}. In this paper, we study dynamic patterns as they often are harder to parallelize and are becoming increasingly important. 
 
-Rather than restricting to a single pattern, our experiments use a randomly-generated sparse mask. Each cell is independently kept with probability $p$, where $p$ is the fraction of dense entries. This lets us observe performance at varying sparsity levels without biasing on any particular sparsity pattern. To match the granularity at which transformers in practice handle sparsity (which is in turn motivated by the GPU hardware architecture), the mask is defined at a \emph{block} level rather than per-element: a granularity of $G$ means we partition the $N \times N$ score matrix into $G \times G$ tiles and label each tile as fully dense or fully sparse. A granularity of $1$ corresponds to per-element sparsity, while a granularity of $32$ means $32 \times 32$ tiles are the smallest unit of sparsity.
-
-Block-level sparsity reduces the total amount of work on the score matrix, but it gives up structure that dense kernels rely on. Coalesced memory accesses, vectorized loads, and predictable load balancing all assume regular tile traversal; once tiles are skipped according to a mask, warps within a thread block could be assigned different amounts of work (load imbalance), the rows of the score matrix lose alignment in memory (uncoalesced accesses), and arithmetic intensity drops. Recovering performance therefore requires both a sparse-friendly storage format and kernels optimized to handle sparsity masks in the three stages of attention.
+For our randomly-generated sparse masks, each cell is marked sparse with probability $p$, where $p$ is the fraction of sparse entries. To match the granularity at which transformers in practice handle sparsity (which is in turn motivated by the GPU hardware architecture) \cite{gale2020sparse}, the mask is defined at a \emph{block} level rather than per-element: a granularity of $G$ means we partition the $N \times N$ matrix into $G \times G$ tiles and label each tile as fully dense or fully sparse. Although sparsity reduces the total amount of work, it gives up structure that dense kernels rely on. Coalesced memory accesses, vectorized loads, and predictable load balancing all assume regular tile traversal; once tiles are skipped, all of these assumptions are not provided. Recovering performance therefore requires both a sparse-friendly storage format and kernels optimized to handle sparsity masks in the three stages of attention.
 
 \paragraph{BCSR storage.}
-We store the block-level mask in \emph{Blocked Compressed Sparse Row} (BCSR) format. BCSR is the block analogue of \emph{Compressed Sparse Row} (CSR), a standard sparse-matrix layout that stores only the nonzero values along with the column index of each one and a per-row offset into that list. BCSR does the same thing at the granularity of fixed-size tiles: instead of recording the position of every individual nonzero, it records the position of every nonzero \emph{tile}. For each row of tiles, we store the column indices of the dense tiles, and the dense tiles themselves are laid out contiguously in memory in row-major order. This keeps the inner loop of every kernel operating on dense, contiguous tiles (so coalescing and vectorization still apply within a tile) while cutting work in proportion to the fraction of sparse tiles.
+We store the block-level mask in \emph{Blocked Compressed Sparse Row} (BCSR) format. BCSR is the block analogue of \emph{Compressed Sparse Row} (CSR), a standard sparse-matrix layout that stores only the nonzero values along with the column index of each one. BCSR does the same thing at the granularity of fixed-size tiles: instead of recording the position of every individual nonzero, it records the position of every nonzero \emph{block}. For each row of tiles, we store the column indices of the dense tiles, and the dense tiles themselves are laid out contiguously in memory in row-major order. This keeps the inner loop of every kernel operating on dense, contiguous tiles (so coalescing and vectorization still apply within a tile) while cutting work in proportion to the fraction of sparse tiles.
 
-\paragraph{Sparsity in MatMul.}
-The two matrix multiplications in Figure~\ref{fig:attention} change shape under block sparsity. MatMul~(4) computes $QK^T$, but only at positions where the mask is dense. This is the \emph{sampled dense-dense matrix multiplication} (SDDMM) pattern: $Q$ and $K$ are dense, and the mask selects which output tiles to compute. Skipping a sparse output tile skips an entire block of dot-product reductions, which is where most of the savings come from. MatMul~(5) computes $\sigma(QK^T) \cdot V$, where the left operand is now a block-sparse matrix in BCSR form and $V$ is dense. This is the \emph{sparse-dense matrix multiplication} (SpMM) pattern: each dense tile of the score matrix contributes a small dense matmul with the corresponding rows of $V$, and the BCSR row indexing tells each thread block which tiles to accumulate.
-
-\paragraph{Sparsity in Softmax.}
-The row-wise softmax sits between MatMul~(4) and MatMul~(5), and it has to respect the same mask. Sparse tiles can be treated as containing $-\infty$ scores, so they contribute zero to both the per-row sum and the output. We never materialize those tiles in practice: the softmax kernel walks the BCSR row directly, computes the per-row max and the exponential sum across only the dense tiles in that row, and writes back the normalized values in place. The reduction structure is the same as in dense softmax, but the length of each reduction is now proportional to the number of dense tiles in the row rather than to $N$.
+\paragraph{Sparsity in Kernels.}
+The two matrix multiplications in Figure~\ref{fig:attention} change shape under block sparsity. MatMul~(4) computes $QK^T$, but only at positions where the mask is dense. This is the \emph{sampled dense-dense matrix multiplication} (SDDMM) pattern: $Q$ and $K$ are dense, and the mask selects which output tiles to compute. MatMul~(5) computes $\sigma(QK^T) \cdot V$, where the left operand is now a block-sparse matrix in BCSR form and $V$ is dense. This is the \emph{sparse-dense matrix multiplication} (SpMM) pattern. The row-wise softmax sits between MatMul~(4) and MatMul~(5), and it has to respect the same mask. Sparse tiles can be treated as containing $-\infty$ scores, so they contribute zero to both the per-row sum and the output. 
 
 \paragraph{Workload characterization.}
 At moderate granularities, all three sparse stages stay data-parallel at the tile level. SDDMM (MatMul~(4)) and SpMM (MatMul~(5)) decompose into independent per-tile dense matrix multiplications with no cross-tile dependencies, while the sparse softmax does a per-row reduction (max and exponential sum) over only the dense tiles in a row, and the rows themselves remain independent. Locality is strong inside a tile because operands are dense and contiguous in memory, and BCSR's row-stationary layout keeps each row's column indices and dense values close together, so a kernel sweeping a row sees a tight access pattern. SIMD execution is effective on the inner $g \times g$ matmul, where each warp runs a regular dense kernel.
 
-This picture degrades sharply at small granularities ($g \in \{1, 2, 4\}$). At $g=1$ the workload is essentially a scatter-gather, and even at $g=2$ or $4$ each tile is smaller than a warp, so the inner dense matmul cannot fill 32 SIMT lanes and tensor-core or vector instructions cannot reach their minimum operand sizes. A single warp ends up assigned to multiple adjacent tiles whose mask bits diverge, forcing serialized execution within the warp. BCSR's per-tile metadata (a column-index lookup and a row-pointer dereference) also becomes comparable in cost to the actual compute, so memory traffic is dominated by indexing rather than values. Even at larger granularities the scheduling unit is now a variable-length list of dense tiles rather than a fixed row of $N$ elements, so load imbalance across thread blocks is the primary cost we have to contain.
+This picture degrades sharply at small granularities. At $g=1$ the workload is essentially a scatter-gather, and even at $g=2, 4, 8$ each tile is smaller than a warp, so the inner dense matmul cannot fill 32 SIMT lanes and tensor-core or vector instructions cannot reach their minimum operand sizes. A single warp ends up assigned to multiple adjacent tiles whose mask bits diverge, forcing serialized execution within the warp. BCSR's per-tile metadata (a column-index lookup and a row-pointer dereference) also becomes comparable in cost to the actual compute, so memory traffic is dominated by indexing rather than values. Even at larger granularities the scheduling unit is now a variable-length list of dense tiles rather than a fixed row of $N$ elements, so load imbalance across thread blocks is the primary cost we have to contain.
 
 
 \section*{Approach}
-The main development focus of the project was on the three functions: Sparse Matrix Multiplication (SpMM), Sparse Dense Dense Matrix Multiplication (SDDMM), and Sparse Softmax. The entirety of the attention layer was written in CUDA, targeting an architecture of an RTX Blackwell 6000, which has a 128 KB L1 cache for shared memory, 188 Streaming Multiprocessors (SMs), 24,064 CUDA cores, and supports up to 1024 threads in each thread block, performing best with around 5 block occupancy per SM with 128-512 threads per block. We implemented multiple versions of the three functions, starting with a best-effort dense matmul baseline that uses efficient shared memory tiling, then developing sparse mappings and scheduling approaches to leverage sparsity while preserving as much of the locality and parallelism of the dense case as possible.
+The main development focus of the project was on the three functions: Sparse Matrix Multiplication (SpMM), Sampled Dense Dense Matrix Multiplication (SDDMM), and Sparse Softmax. The entirety of the attention layer was written in CUDA, targeting an architecture of an RTX Blackwell 6000, which has a 128 KB L1 cache for shared memory, 188 Streaming Multiprocessors (SMs), 24,064 CUDA cores, and supports up to 1024 threads in each thread block, performing best with around 5 block occupancy per SM with 128-512 threads per block. We implemented multiple versions of the three functions, starting with a best-effort dense matmul baseline that uses efficient shared memory tiling, then developing sparse mappings and scheduling approaches to leverage sparsity while preserving as much of the locality and parallelism of the dense case as possible.
 
 \subsection*{Tiled MatMul}
 Before describing the sparse functions, we first describe our hand written baseline, Tiled Matrix Multiplication. Given $A \in \mathbb{R}^{M \times K}$ and $B \in \mathbb{R}^{K \times N}$, we compute $C = A \cdot B$.
@@ -122,7 +120,7 @@ The natural starting point is to graft the sparse skip onto tiled matmul. A thre
 \]
 i.e., every column index that is dense in at least one of the $T$ rows. The block loads the dense entries of $A$ on rows $[i_0, i_0+T)$ together with the rows of $B$ indexed by $k \in \mathcal{K}$ into shared memory, and each thread then accumulates over only the columns that are dense in \emph{its} own row.
 
-\begin{algorithm}[H]
+\begin{algorithm}
 \caption{Sparse--dense matmul with row-union column scheduling. One thread block per $T \times T$ tile of $C$.}
 \begin{algorithmic}[1]
 \Statex \textbf{Block state:} tile origin $(i_0, j_0)$; $\mathcal{K} \gets \bigcup_{i \in [i_0, i_0 + T)} \{k : A_{ik} \text{ dense}\}$
@@ -152,13 +150,12 @@ Both problems come from forcing $T$ rows with potentially different sparsity pat
 
 \paragraph{Optimization 1: one row at a time.}
 We change the block's footprint from a $T \times T$ tile of $C$ to a $1 \times T^2$ stripe: a single row of $A$, paired with $T^2$ output columns. The thread count per block is unchanged, but now only one row of $A$ is in play, so $\mathcal{K}$ collapses to the sparsity pattern of that single row. The union disappears, every thread that loads a column of $B$ uses it, and every thread performs the same number of multiply-adds. Load imbalance and the vectorization problem both go away.
-
 \paragraph{Optimization 2: align rows with the sparsity granularity.}
 After implementing and testing the algorithm above, our measured speedups over the baseline were minimal. Profiling with Nsight Compute showed unexpectedly large load latencies in the kernel. We can see why by looking at $T = 16$ for example. In tiled matmul, a thread block outputs $T \times T = 256$ entries while loading $A_{i:i+T,\, k}$ and $B_{k,\, j:j+T}$ for all $k$, totaling $2TK$ elements. In the $1$-row mapping above, the same block still outputs $T^2 = 256$ entries (now as a $1 \times T^2$ stripe), but loads $A_{i,\, k}$ and $B_{k,\, j:j+T^2}$ for all $k$, totaling $(T^2 + 1)K$ elements. That is roughly \emph{$16\times$} more memory traffic per output entry than the dense baseline, which matches the load times we saw in profiling.
 
-We collapsed to a single row of $A$ in Optimization~1 to guarantee a consistent sparsity pattern across the rows in a block. But that constraint is softer than it looks: by construction, the mask is block-sparse at granularity $G$, so any consecutive $G$ rows of $A$ that fall inside the same row of $G \times G$ tiles share a sparsity pattern by definition. We therefore widen the block back out, mapping each block to a $G \times (T^2/G)$ tile of $C$. The total load per block becomes $(G + T^2/G)\,K$, which interpolates between the $1$-row case at $G = 1$ and the dense baseline at $G = T$, while preserving the single-pattern invariant that made Optimization~1 work in the first place. This 
+We collapsed to a single row of $A$ in Optimization~1 to guarantee a consistent sparsity pattern, but that constraint is softer than it looks: by construction, the mask is block-sparse at granularity $G$, so any consecutive $G$ rows of $A$ share a sparsity pattern by definition. We therefore widen the block back out, mapping each block to a $G \times (T^2/G)$ tile of $C$. The total load per block becomes $(G + T^2/G)\,K$. This allows us in large sparse patterns to increase our data reuse.
 
-\subsection*{Sparse Dense Dense Matrix Multiplication (SDDMM)}
+\subsection*{Sampled Dense Dense Matrix Multiplication (SDDMM)}
 SDDMM computes $C = (AB) \odot M$, where $A$ and $B$ are dense and $M$ is the sparse mask (in BCSR form). Only the entries of $C$ at dense positions of $M$ need to be computed and stored in the output BCSR matrix. We implemented three broad approaches; the first one is a direct extension of tiled matmul which serves as our baseline, the second one is a gather-based approach that batches together dense column-blocks of $M$ to recover some of the reuse of tiled matmul, and the third one is a gather-based approach that schedules at the level of individual active coordinates to eliminate all redundant work.
 
 \paragraph{Naive: tiled matmul with a sparse output mask.}
@@ -271,7 +268,12 @@ The takeaway from Figure~\ref{fig:stalls} is that memory traffic, not arithmetic
 
 
 \subsection*{SDDMM}
-\includegraphics[width=\linewidth]{figs/speedup_sparse_sddmm.png}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\linewidth]{figs/speedup_sparse_sddmm.png}
+    \caption{End-to-end speedup of the sparse SDDMM kernel over the dense baseline, swept across $N$, $G$, and $p$.}
+    \label{fig:sddmm-speedup}
+\end{figure}
 
 Things of note:
 \begin{enumerate}
@@ -299,7 +301,12 @@ Things of note:
     \label{fig:stalls-problem-size}
 \end{figure}
 \subsection*{SoftMax}
-\includegraphics[width=\linewidth]{figs/speedup_sparse_softmax.png}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\linewidth]{figs/speedup_sparse_softmax.png}
+    \caption{End-to-end speedup of the sparse softmax kernel over the dense baseline, swept across $N$, $G$, and $p$.}
+    \label{fig:softmax-speedup}
+\end{figure}
 In softmax we see that granularity makes no difference in speedup (as we don't do any per granular solutions), and additionally, the larger theproblem size speedups actually occur. (Talk about N=1024, N=4096)
 
 

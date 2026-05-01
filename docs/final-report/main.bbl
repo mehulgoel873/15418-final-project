@@ -1,5 +1,10 @@
 \begin{thebibliography}{1}
 
+\bibitem{gale2020sparse}
+Trevor Gale, Matei Zaharia, Cliff Young, and Erich Elsen.
+\newblock Sparse {GPU} kernels for deep learning.
+\newblock In {\em Proceedings of the International Conference for High Performance Computing, Networking, Storage and Analysis (SC)}, 2020.
+
 \bibitem{lin2021survey}
 Tianyang Lin, Yuxin Wang, Xiangyang Liu, and Xipeng Qiu.
 \newblock A survey of transformers, 2021.

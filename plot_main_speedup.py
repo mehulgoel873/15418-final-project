@@ -80,7 +80,7 @@ def main():
     if len(Ns) != 4:
         print(f"warning: expected 4 N values, found {Ns}")
 
-    fig, axes = plt.subplots(2, 2, figsize=(12, 8), sharey=False)
+    fig, axes = plt.subplots(1, 4, figsize=(16, 4), sharey=False)
     for ax, N in zip(axes.flat, Ns):
         for g in granularities:
             xs, ys = [], []
