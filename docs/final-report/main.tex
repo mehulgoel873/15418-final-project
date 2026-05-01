@@ -157,10 +157,42 @@ After implementing and testing the algorithm above, our measured speedups over t
 We collapsed to a single row of $A$ in Optimization~1 to guarantee a consistent sparsity pattern across the rows in a block. But that constraint is softer than it looks: by construction, the mask is block-sparse at granularity $G$, so any consecutive $G$ rows of $A$ that fall inside the same row of $G \times G$ tiles share a sparsity pattern by definition. We therefore widen the block back out, mapping each block to a $G \times (T^2/G)$ tile of $C$. The total load per block becomes $(G + T^2/G)\,K$, which interpolates between the $1$-row case at $G = 1$ and the dense baseline at $G = T$, while preserving the single-pattern invariant that made Optimization~1 work in the first place. This 
 
 \subsection*{Sparse Dense Dense Matrix Multiplication (SDDMM)}
+SDDMM computes $C = (AB) \odot M$, where $A$ and $B$ are dense and $M$ is the sparse mask (in BCSR form). Only the entries of $C$ at dense positions of $M$ need to be produced, and the result is itself stored in BCSR. We tried three approaches; the third is the one we ended up using.
+
+\paragraph{Naive: tiled matmul with a sparse output mask.}
+The most direct approach is to keep the dense tiled matmul structure and skip writes for masked-out positions. Each thread block computes a $T \times T$ tile of the output exactly as in dense matmul, but threads whose output position is sparse simply return without writing. The dense loads of $sA$ and $sB$ are unchanged, so cache locality and vectorization are preserved. The cost is wasted computation: at sparsity above $\sim 0.9$, the vast majority of threads perform dot products whose results are never written. Workload imbalance also reappears, because the useful work per block depends on how many of its $T^2$ positions are dense, and at high sparsity an entire $T \times T$ tile can be launched with almost nothing to compute.
+
+\paragraph{Row-batched dense GEMM (\texttt{sddmm.cu}).}
+Our first gather-based approach gathers at the BCSR block-row level. Each thread block is assigned one block-row $b_i$ of $C$ together with a contiguous \emph{batch} of dense column-blocks within that row, where the batch size is a per-granularity constant tuned to fill the warps and fit in shared memory. The block first reads its batch's column indices from the BCSR \texttt{col\_idx} array; then, for each $32$-wide chunk of the $K$ dimension, it loads (i) the $T \times 32$ stripe of $A$ corresponding to its block-row, once, and (ii) the $T \times 32$ stripe of $B$ for each column-block in the batch, gathered into one shared-memory buffer. The inner loop is then a clean dense matmul: every thread accumulates a $32$-element dot product per K-chunk with no mask checks, because the column-blocks were filtered to the dense ones during the gather. After the $K$ sweep, the accumulators are written directly into $C$'s BCSR storage. The cost of loading $A$ amortizes across every column-block in the batch, and the mask is consulted once per batch rather than once per output entry.
+
+The drawback is grid sizing: different block-rows have different numbers of dense column-blocks, so the grid is sized for the \emph{worst} row. Block-rows with fewer dense blocks have leftover thread blocks that exit immediately, and at low granularity the per-row variance is large enough that this launch overhead grows noticeable.
+
+\paragraph{Active-coordinate gather.}
+% Read this over @Saransh, I made assumptions I'm not sure if it's corect
+The version we ended up using inverts the order of operations: first gather the positions that need to be computed, then compute only those. The output is partitioned into $32 \times 32$ SDDMM tiles, which sit on top of the smaller $T \times T$ BCSR blocks of the mask (with $T \le 32$). One warp owns each SDDMM tile and processes it in three stages.
+
+\begin{enumerate}
+    \item \textbf{Dynamic tile scheduling.} Warps pull the next $32 \times 32$ tile via an atomic increment of a global counter, rather than from a static grid. Warps that finish quickly grab another tile, and warps that land on a fully-sparse tile move on after almost no work.
+    \item \textbf{Active-coordinate list.} The warp walks the BCSR row-pointers of $M$ to find the dense $T \times T$ blocks that intersect its $32 \times 32$ tile, and appends the $(r, c)$ coordinates of every entry inside those blocks to a per-warp list in shared memory. If the list is empty after this pass, the warp is done with the tile.
+    \item \textbf{Dense load, sparse compute, sparse write-back.} The warp iterates the $N$ dimension in $32$-wide chunks. Each chunk loads the full $32 \times 32$ stripes of $A$ and $B$ into shared memory with regular coalesced reads, then computes a dot product \emph{only} at the coordinates in the active list. After all $N$-chunks finish, the accumulators are written back into the BCSR storage of $C$ at exactly those positions.
+\end{enumerate}
+
+This recovers the dense-load patterns of tiled matmul (the $A$ and $B$ tiles are read densely and contiguously, so coalescing and vectorization still apply) while avoiding the wasted arithmetic of the naive variant: every multiply-add lands at a position whose result will actually be stored. The dynamic counter also keeps warps busy regardless of how the dense tiles are distributed in $C$, so the kernel behaves consistently as $G$ varies.
+
+
+
+\subsection*{SoftMax}
+TODO TODO TODO TODO
+\section*{Results}
+
+\subsection*{General Speedup}
+\subsection*{SDDMM}
 
 \subsection*{SoftMax}
 
-\section*{Results}
+
+\subsection*{SpMM}
+
 
 \bibliographystyle{plain}
 \bibliography{references}
