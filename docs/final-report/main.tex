@@ -220,7 +220,7 @@ Two observations frame the rest of this section:
 Our target machine was correct, with the hyper parallelization of threads available on a GPU, we were able to utilize the incredible speedup for massive Matrix Multiplications and Softmaxs that wouldn't have been possible otherwise. 
 
 
-\subsection*{General Speedup}
+\subsection*{Overall Speedup}
 
 \begin{figure}[H]
     \centering
@@ -265,8 +265,6 @@ Even at a favorable corner of the sweep ($N = 32768$, $G = 8$, $p = 0.95$), wher
 The takeaway from Figure~\ref{fig:stalls} is that memory traffic, not arithmetic, is what bounds us in the high-sparsity regime. Skipping more arithmetic does not proportionally reduce loads: every tile we do compute still has to bring in its operand stripes, the BCSR metadata still has to be walked, and the softmax still has to sweep its row of dense tiles. The $20\times \to 12\times$ residual therefore lives in memory-system stalls rather than wasted compute, and would shrink under techniques aimed at the memory subsystem (better load pipelining, persistent kernels, smaller working sets).
 
 
-
-
 \subsection*{SDDMM}
 \begin{figure}[H]
     \centering
@@ -275,40 +273,50 @@ The takeaway from Figure~\ref{fig:stalls} is that memory traffic, not arithmetic
     \label{fig:sddmm-speedup}
 \end{figure}
 
-Things of note:
+The SDDMM performance graph isolates the $QK^T$ multiplication. The structural characteristics of the performance analysis are:
 \begin{enumerate}
-    \item Granularity 32 sees no speedup at N= 1024 case
-    \item by per-kernel stalls (70\%) of time spent loading from DRAM or L1 Cache, relatively memory constrained
-    \item Still contian speedup as N increases, shown by breakthrough graph to be based on the significantly larger amount of time waiting for loads from global memory, overall compute pretty fast. 
+    \item \textbf{Low occupancy at small scale ($N=1024$):} Granularity 32 sees virtually no speedup at $N=1024$. At $G=32$, a $1024 \times 1024$ output matrix consists of only $32 \times 32 = 1024$ total tiles. Since our dynamic active-coordinate kernel assigns exactly one warp per SDDMM tile, this configuration launches too few warps to keep the SMs fully occupied or hide launch overheads, reducing sparsity benefits.
+    \item \textbf{Memory bottlenecks and stall profiles:} Figure~\ref{fig:stalls-problem-size} (ahead) shows that SDDMM has zero barrier stalls. This is because the dynamic gather algorithm operates entirely at the single warp level (using \texttt{\_\_syncwarp()}), avoiding block-wide \texttt{\_\_syncthreads()} completely. 
+    \item \textbf{Shifting bottlenecks with $N$:} At $N=1024$, over 60\% of warp stalls are \texttt{long\_scoreboard} (waiting on global memory). The kernel is fully bound by fetching BCSR metadata and streaming the input matrices without enough active compute to hide the latency. As $N$ scales up to 32768, the global memory stall fraction drops to roughly 30\%, while \texttt{mio\_throttle} (shared memory waits) jumps to 20\%. This indicates that at large sizes, the inner loop, which densely loads $A$ and $B$ tiles into shared memory and then sparsely computes dot products from those shared arrays, starts hitting the hardware shared memory bandwidth limits of the SM.
+    \item \textbf{Divergence in $1/(1-p)$ scaling:} As sparsity $p$ increases toward $0.99$, the theoretical arithmetic speedup approaches $100\times$. For fine granularities ($G=1$ and $2$), the observed SDDMM speedup plateaus significantly below this upper bound. At $G=1$ and high sparsity, almost every structural $32 \times 32$ block has at least one active entry, forcing the warp to redundantly load the dense stripes of $A$ and $B$ from global memory just to compute a scattered handful of values. While the active coordinate list perfectly scales down the actual \textit{FLOPs}, it introduces severe metadata indexing overhead and heavily uncoalesced memory accesses. Conversely, coarser granularities like $G=8$ and $G=32$ exhibit the exact concave-up, sharply increasing behavior we expect from theoretical scaling, by skipping large, hardware-aligned contiguous blocks and leveraging coalesced load and vectorized compute potential.
 \end{enumerate}
 
+Overall, our active-coordinate gather successfully eliminated the wasted computation of a masked matmul, making it so that every FLOP computed was necessary. However, the plateauing behavior at lower granularities means that the true cost of sparse structures is often metadata overhead, uncoalesced memory accesses, and inefficient mapping. The big difference between $G=1$ and $G=32$ suggests that tuning/specialization based on tiling models and GPU hardware strengths, specifically contiguous memory and warp alignment, would be helpful to attain ideal scaling on lower granularities. While our implementation proves this is possible at coarse granularities, further tuning, varying mapping approaches, and specializing code for specific sparsity-granularity models could help achieve more consistent performance across the full spectrum.
+
+Potential improvements for SDDMM would involve decoupling the SDDMM tile size from the problem dimension at small $N$ to artificially inflate warp counts and restore occupancy. At large $N$, the shared memory bottleneck (\texttt{mio\_throttle}) could be addressed by increasing register-level accumulation or tuning the tile aspect ratio to improve data reuse from each shared memory fetch, although the latter is a tradeoff between shared memory size (which affects block-SM occupancy) and memory bandwidth (which affects the stall profile).
 
 \begin{figure}[H]
     \centering
     \begin{subfigure}[t]{0.48\linewidth}
         \centering
         \includegraphics[width=\linewidth]{figs/stalls_1024_breakdown.png}
-        \caption{Per-kernel warp stall reasons for N = 1024.}
+        \caption{Per-kernel warp stall reasons for $N = 1024$.}
         \label{fig:stalls-1024}
     \end{subfigure}\hfill
     \begin{subfigure}[t]{0.48\linewidth}
         \centering
         \includegraphics[width=\linewidth]{figs/stalls_32768_breakdown.png}
-        \caption{Per-kernel warp stall reasons for N = 32768}
+        \caption{Per-kernel warp stall reasons for $N = 32768$.}
         \label{fig:stalls-32678}
     \end{subfigure}
-    \caption{Nsight Compute traces for $N = 32768, G = 8, p = 0.95$, $N = 1024, G = 8, p = 0.95$ runs. Per-kernel stalls: \texttt{long\_scoreboard} flags warps waiting on global-memory loads, \texttt{mio\_throttle} flags warps waiting on shared-memory loads, \texttt{barrier} flags warps waiting on a synchronization call}. 
+    \caption{Nsight Compute traces for the $N = 32768$, $N = 1024$ run. Per-kernel stalls: \texttt{long\_scoreboard} flags warps waiting on global-memory loads, \texttt{mio\_throttle} flags warps waiting on shared-memory loads, \texttt{barrier} flags warps waiting on a synchronization call.} 
     \label{fig:stalls-problem-size}
 \end{figure}
-\subsection*{SoftMax}
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=\linewidth]{figs/speedup_sparse_softmax.png}
-    \caption{End-to-end speedup of the sparse softmax kernel over the dense baseline, swept across $N$, $G$, and $p$.}
-    \label{fig:softmax-speedup}
-\end{figure}
-In softmax we see that granularity makes no difference in speedup (as we don't do any per granular solutions), and additionally, the larger theproblem size speedups actually occur. (Talk about N=1024, N=4096)
 
+\subsection*{Sparse Softmax}
+\includegraphics[width=\linewidth]{figs/speedup_sparse_softmax.png}
+
+The sparse softmax speedup characteristics look different from SDDMM and SpMM:
+\begin{enumerate}
+    \item \textbf{Granularity invariance:} The curves for $G=1, 2, 8, 32$ overlap almost entirely. This matches our implementation in \texttt{softmax.cu}: the softmax kernel maps a thread block to a single matrix row and processes all items within that row as a flattened, contiguous 1D array of length \texttt{num\_blks * T}. It does not matter whether those non-zero elements came from two $16 \times 16$ blocks or thirty-two $1 \times 1$ blocks; the row-interleaved BCSR layout ensures the memory access pattern is identical (as discussed in the implementation approach above). Speedup is therefore strictly a function of total sparsity $p$, not granularity $G$.
+    \item \textbf{Reduction scaling:} At a small problem size ($N=1024$), almost 30\% of warp stalls are \texttt{barrier} stalls. Because each row is short, the chunk-processing phase is fast and load imbalance has the tendency to be higher, so threads spend a disproportionate amount of time waiting at block-wide \texttt{\_\_syncthreads()} barriers during the shared-memory max and sum reductions. 
+    \item \textbf{Bandwidth bottleneck:} As $N$ grows to 32768, the fraction of \texttt{barrier} stalls drops by nearly half (to 15\%), and \texttt{long\_scoreboard} stalls increase to 60\%. This is likely because the kernel is now streaming large amounts of data from global memory (completely bound by DRAM bandwidth) just to use it once. The reduction phases are still present, but they are now a smaller fraction of the total runtime and therefore cause fewer stalls. This matches our analysis above that the softmax kernel is heavily memory-bound.
+    \item \textbf{Scaling response tied to problem size:} Because softmax operates on 1D vectors rather than multidimensional matrices, its baseline arithmetic intensity is negligible compared to the $O(N^3)$ matmuls. At lower token lengths ($N=1024, 4096$), increasing sparsity reduces the total work available so much that launch overheads, metadata resolution, and sequential reduction operations completely dominate, resulting in a flattened speedup curve. However, at larger context lengths ($N=16384, 32768$), the kernel reaches an inflection point where the amount of saved computation overcomes the fixed costs, and the speedup cleanly follows the ideal concave-up $1/(1-p)$ theoretical scaling response.
+\end{enumerate}
+
+Ultimately, while our custom row-interleaved BCSR format and statically partitioned mappers successfully balanced the SM workloads and kept memory accesses perfectly coalesced, the absolute speedups depend heavily on maintaining enough active work per block. We initially hypothesized that avoiding the traversal of a fully dense $N \times N$ matrix would grant order-of-magnitude improvements across the board. In practice, at small regimes, the fundamental memory-bound nature combined with low active work meant our gains were inherently capped. But at context lengths where these optimizations actually matter most ($N=16384+$), the architectural scaling matched our theoretical maximums (hopes).
+
+Because softmax requires multi-pass reads, the \texttt{long\_scoreboard} penalty at large $N$ could benefit from fusing operations. If the scaling of $Q$ and the softmax itself could be fused directly into the tail of the SDDMM kernel, the intermediate sparse scores would never need to be written to and read back from global memory, removing this bottleneck. This would require on-the-fly softmax computation as the SDDMM tile is processed, which is a non-trivial extension of the current algorithm, but it would have had a lot of potential to improve the end-to-end speedup.
 
 \subsection*{SpMM}
 \begin{figure}[H]
