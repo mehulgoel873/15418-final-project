@@ -28,6 +28,7 @@
 \fancyhf{}
 \lhead{Blocked Dynamic Sparse Attention}
 \rhead{Mehul Goel, Saransh Agrawal}
+\cfoot{\thepage}
 \setlength{\headheight}{14pt}
 
 \begin{document}
@@ -162,7 +163,7 @@ SDDMM computes $C = (AB) \odot M$, where $A$ and $B$ are dense and $M$ is the sp
 \paragraph{Naive: tiled matmul with a sparse output mask.}
 The most direct approach is to keep the dense tiled matmul structure and skip writes for masked-out positions. Each thread block computes a $T \times T$ tile of the output exactly as in dense matmul, but threads whose output position is sparse simply return without writing. The dense loads of $sA$ and $sB$ are unchanged, so cache locality and vectorization are preserved. The cost is wasted computation: at sparsity above $\sim 0.9$, the vast majority of threads perform dot products whose results are never written. Workload imbalance also reappears, because the useful work per block depends on how many of its $T^2$ positions are dense, and at high sparsity an entire $T \times T$ tile can be launched with almost nothing to compute.
 
-\paragraph{Row-batched dense GEMM (\texttt{sddmm.cu}).}
+\paragraph{Row-batched dense Matrix Multiplication (\texttt{sddmm.cu}).}
 Our first gather-based approach gathers at the BCSR block-row level. Each thread block is assigned one block-row $b_i$ of $C$ together with a contiguous \emph{batch} of dense column-blocks within that row, where the batch size is a per-granularity constant tuned to fill the warps and fit in shared memory. The block first reads its batch's column indices from the BCSR \texttt{col\_idx} array; then, for each $32$-wide chunk of the $K$ dimension, it loads (i) the $T \times 32$ stripe of $A$ corresponding to its block-row, once, and (ii) the $T \times 32$ stripe of $B$ for each column-block in the batch, gathered into one shared-memory buffer. The inner loop is then a clean dense matmul: every thread accumulates a $32$-element dot product per K-chunk with no mask checks, because the column-blocks were filtered to the dense ones during the gather. After the $K$ sweep, the accumulators are written directly into $C$'s BCSR storage. The cost of loading $A$ amortizes across every column-block in the batch, and the mask is consulted once per batch rather than once per output entry.
 
 The drawback is grid sizing: different block-rows have different numbers of dense column-blocks, so the grid is sized for the \emph{worst} row. Block-rows with fewer dense blocks have leftover thread blocks that exit immediately, and at low granularity the per-row variance is large enough that this launch overhead grows noticeable.
@@ -184,14 +185,39 @@ This recovers the dense-load patterns of tiled matmul (the $A$ and $B$ tiles are
 \subsection*{SoftMax}
 TODO TODO TODO TODO
 \section*{Results}
+We measure performance by running one full attention iteration end-to-end and comparing our sparse implementation's wall-clock time against a dense baseline. The baseline runs the same attention computation, but uses our optimized tiled-matmul kernel for both $QK^T$ and the multiplication with $V$, and a standard dense row-wise softmax in between. It does not exploit the mask in any way: it materializes the full $N \times N$ score matrix and processes every entry. Both implementations are written in CUDA, target the same RTX Blackwell 6000, and are timed end-to-end as well as kernel-by-kernel.
+
+We sweep three hyperparameters:
+\begin{itemize}
+    \item $N$, the context length (the problem size), $\in \{2^{10}, 2^{12}, 2^{14}, 2^{15}\}$.
+    \item $p$, the fraction of sparse entries in the mask, $\in \{0.5, 0.9, 0.95, 0.99\}$.
+    \item $G$, the sparsity granularity, $\in \{1, 2, 8, 32\}$.
+\end{itemize}
+
+\paragraph{Experimental setup.}
+For each $(N, p, G)$ configuration we run both the sparse and the dense baseline on three random seeds. The seed controls the input matrices and the sparsity pattern, so both implementations see identical inputs and an identical mask on each run. We record per-kernel wall-clock times alongside the end-to-end attention time, and report the mean across the three seeds.
+
+\paragraph{Hyperparameter notes.}
+Two observations frame the rest of this section:
+\begin{itemize}
+    \item Increasing $p$ reduces the amount of useful arithmetic. An ideally-parallel sparse implementation would therefore reach a speedup of $1/(1 - p)$ over the dense baseline ($100\times$ at $p = 0.99$). That ratio is an upper bound; sequential portions and per-tile overhead always pull the realized speedup below it.
+    \item Increasing $G$ makes the sparsity pattern coarser and less expressive: at $G = 32$, every entry inside a $32 \times 32$ tile shares the same dense/sparse decision. Coarser patterns lose modeling fidelity, but they also let the kernels exploit larger contiguous regions, recovering vectorized loads and warp-aligned compute. The sweep over $G$ exists to surface this tradeoff; in a production setting the granularity would be chosen empirically for the workload rather than from a uniform-random mask.
+\end{itemize}
 
 \subsection*{General Speedup}
-\subsection*{SDDMM}
 
+\includegraphics[width=\linewidth]{figs/primary-speedup.png}
+
+Looking at the speedup graphs, it's clear that problem size has a strong correlation with speedup. 
+\subsection*{SDDMM}
+\includegraphics[width=\linewidth]{figs/speedup_sparse_sddmm.png}
 \subsection*{SoftMax}
+\includegraphics[width=\linewidth]{figs/speedup_sparse_softmax.png}
+
 
 
 \subsection*{SpMM}
+\includegraphics[width=\linewidth]{figs/speedup_sparse_spmm.png}
 
 
 \bibliographystyle{plain}
