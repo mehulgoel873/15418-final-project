@@ -7,3 +7,5 @@ The nonlinearity of the softmax leads to significant parallel slowdowns on CUDA 
 Project Proposal: [pdf](project-proposal/proposal.pdf)
 
 Midway Report: [pdf](milestone-report/midway.pdf)
+
+Final Report: [pdf](final-report/main.pdf)
